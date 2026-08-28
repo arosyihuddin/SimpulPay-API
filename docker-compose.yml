@@ -1,0 +1,15 @@
+name: gopay2api
+
+services:
+  gopay-gateway:
+    build: .
+    container_name: gopay2api
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - PORT=3000
+    volumes:
+      - ./data:/app/data
