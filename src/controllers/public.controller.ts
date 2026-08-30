@@ -30,7 +30,7 @@ export const health = (c: Context<AppEnv>) =>
 export const apiHealth = (c: Context<AppEnv>) =>
   c.json({
     success: true,
-    message: "Layanan API GoPay Berfungsi Normal",
+    message: "Layanan GoMerch API Berfungsi Normal",
     timestamp: new Date(),
   });
 

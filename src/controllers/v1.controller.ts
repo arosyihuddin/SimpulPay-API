@@ -26,7 +26,7 @@ import { fail, ok } from "../middleware/errorHandler";
 
 export async function health(c: Context<AppEnv>) {
   return c.json(
-    ok({ message: "Layanan API GoPay Berfungsi Normal", timestamp: new Date() }),
+    ok({ message: "Layanan GoMerch API Berfungsi Normal", timestamp: new Date() }),
   );
 }
 
