@@ -1,8 +1,10 @@
-// Route admin (cookie httpOnly): semua handler di controller
-import { Elysia } from "elysia";
+import { Hono } from "hono";
+import type { MiddlewareHandler } from "hono";
+import { adminGuard } from "../middleware/guards";
+import type { AppEnv } from "../types";
+import { cookieToken } from "../utils/auth.helper";
 import {
   setupStatus,
-  setupDb,
   setup,
   login,
   logout,
@@ -22,34 +24,40 @@ import {
   otpVerify,
   refreshSessionCtl,
   deleteGoBizCtl,
-  deriveAdmin,
+  listUsersCtl,
+  createUserCtl,
+  updateUserCtl,
+  deleteUserCtl,
 } from "../controllers/admin.controller";
 
-export const adminRoutes = new Elysia({ prefix: "/admin" })
-  .get("/setup-status", setupStatus)
-  .post("/setup-db", async ({ body }) => setupDb(body))
-  .post("/setup", async ({ body, set }) => setup(body, set))
-  .post("/login", async ({ body, set }) => login(body, set))
-  .post("/logout", async ({ set, headers }) => logout(set, headers))
+const adminAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
+  c.set("adminToken", cookieToken(c));
+  await next();
+};
 
-  // ---- Protected admin ----
-  .guard({}, (app) =>
-    app
-      .derive(deriveAdmin)
-      .get("/me", async ({ adminToken }) => me(adminToken))
-      .post("/change-password", async ({ body }) => changePassword(body))
-      .get("/dashboard", dashboard)
-      .post("/qris", async ({ body }) => createQris(body))
-      .get("/qris", async ({ query }) => listQris(query))
-      .get("/transactions", async ({ query }) => listTransactions(query))
-      .get("/logs", async ({ query }) => listLogs(query))
-      .get("/settings", settings)
-      .post("/api-key", async ({ body }) => apiKey(body))
-      .post("/qris-parse", async ({ body }) => qrisParse(body))
-      .post("/qris-static", async ({ body }) => qrisStatic(body))
-      .post("/merchant-id", async ({ body }) => merchantId(body))
-      .post("/otp-request", async ({ body }) => otpRequest(body))
-      .post("/otp-verify", async ({ body }) => otpVerify(body))
-      .post("/refresh-session", refreshSessionCtl)
-      .delete("/gobiz-session", deleteGoBizCtl),
-  );
+export const adminRoutes = new Hono<AppEnv>()
+  .get("/setup-status", setupStatus)
+  .post("/setup", setup)
+  .post("/login", login)
+  .post("/logout", logout)
+  .use("*", adminAuth, adminGuard)
+  .get("/me", me)
+  .post("/change-password", changePassword)
+  .get("/dashboard", dashboard)
+  .post("/qris", createQris)
+  .get("/qris", listQris)
+  .get("/transactions", listTransactions)
+  .get("/logs", listLogs)
+  .get("/users", listUsersCtl)
+  .post("/users", createUserCtl)
+  .patch("/users/:id", updateUserCtl)
+  .delete("/users/:id", deleteUserCtl)
+  .get("/settings", settings)
+  .post("/api-key", apiKey)
+  .post("/qris-parse", qrisParse)
+  .post("/qris-static", qrisStatic)
+  .post("/merchant-id", merchantId)
+  .post("/otp-request", otpRequest)
+  .post("/otp-verify", otpVerify)
+  .post("/refresh-session", refreshSessionCtl)
+  .delete("/gobiz-session", deleteGoBizCtl);

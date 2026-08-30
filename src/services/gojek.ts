@@ -1,12 +1,11 @@
-// GoPay transaction client + verifyPayment
 import { getValidHeaders, refreshSession } from "./sessionManager";
 import { claimTx, getClaim, insertLog } from "../db/queries";
 import { getMerchantId } from "./qris";
+import type { Db } from "../db/client";
 
 export const GOJEK_TRANSACTIONS_URL =
   "https://api.gojekapi.com/merchant-analytics/v2/merchants/transactions";
 
-// Header tambahan untuk request ke api.gojekapi.com
 export function goBizAcceptHeaders() {
   return {
     Accept: "application/json, text/plain, */*",
@@ -22,13 +21,10 @@ export function goBizAcceptHeaders() {
   };
 }
 
-// GoPay API kirim gross_amount dalam format sen (×100), bukan rupiah.
-// Konversi ke rupiah biar konsisten dengan amount QRIS.
 export function toRupiah(raw: unknown): number {
   return Math.floor(parseInt(String(raw || 0), 10) / 100);
 }
 
-// Flatten transaksi GoPay → bentuk ramah UI/API (buang field raw berantakan)
 export function formatTransaction(tx: any) {
   return {
     amount: toRupiah(tx.gross_amount || tx.real_gross_amount),
@@ -42,7 +38,6 @@ export function formatTransaction(tx: any) {
   };
 }
 
-// Ambil transaksi dari Gojek API (dengan retry auto-refresh saat 401)
 export async function fetchGojekTransactions(
   headers: Record<string, string>,
   params: Record<string, string>,
@@ -64,14 +59,12 @@ export async function fetchGojekTransactions(
   return res.json();
 }
 
-// Status & payment type yang dipakai semua query transaksi
 const TX_STATUSES = "SETTLEMENT,CAPTURE,REFUND,PARTIAL_REFUND";
 const TX_PAYMENT_TYPES =
   "QRIS,GOPAY,OFFLINE_CREDIT_CARD,OFFLINE_DEBIT_CARD,CREDIT_CARD";
 
-// Satu call transaksi dengan retry auto-refresh saat 401.
-// Memusatkan: time-range format, param query, header, retry.
 export async function fetchTransactionsWithRetry(
+  DB: Db,
   opts: {
     userAgent?: string;
     startTime?: number | null;
@@ -81,13 +74,13 @@ export async function fetchTransactionsWithRetry(
     size?: string;
   } = {},
 ): Promise<any[]> {
-  const headers = await getValidHeaders(opts.userAgent);
+  const headers = await getValidHeaders(DB, opts.userAgent);
   if (!headers) {
     throw new Error(
       "Sesi GoPay belum ada. Login OTP lewat dashboard (Settings → Login GoBiz).",
     );
   }
-  const merchantId = opts.merchantIdOverride || (await getMerchantId());
+  const merchantId = opts.merchantIdOverride || (await getMerchantId(DB));
   const now = Date.now();
   const startTimeISO = opts.startTime
     ? new Date(opts.startTime).toISOString()
@@ -113,7 +106,6 @@ export async function fetchTransactionsWithRetry(
       merchant_ids: merchantId,
     });
 
-  // 401-retry sekali per halaman (refresh sesi, ulang halaman yg sama)
   const pageWithRetry = async (
     activeHeaders: Record<string, string>,
     from: string,
@@ -125,10 +117,14 @@ export async function fetchTransactionsWithRetry(
         (firstErr as any).response &&
         (firstErr as any).response.status === 401
       ) {
-        insertLog("WARNING", "Sesi expired (401). Memulai auto-refresh...");
-        const refreshed = await refreshSession();
+        await insertLog(
+          DB,
+          "WARNING",
+          "Sesi expired (401). Memulai auto-refresh...",
+        );
+        const refreshed = await refreshSession(DB);
         if (refreshed) {
-          const newHeaders = await getValidHeaders(opts.userAgent);
+          const newHeaders = await getValidHeaders(DB, opts.userAgent);
           return await fetchPage(newHeaders!, from);
         }
       }
@@ -136,8 +132,6 @@ export async function fetchTransactionsWithRetry(
     }
   };
 
-  // Loop pagination: naikkan from sampai dapat halaman pendek (< size) → habis.
-  // ponytail: API gak kasih total global yg reliable, jadi pakai heuristik panjang halaman.
   const all: any[] = [];
   const MAX_PAGES = 100;
   for (let from = 0; from / pageSizeNum < MAX_PAGES; from += pageSizeNum) {
@@ -153,16 +147,15 @@ export async function fetchTransactionsWithRetry(
   return all;
 }
 
-// Core Helper: Verifikasi Pembayaran dari GoPay API
-// qrisId: scope klaim — satu txId hanya bisa diklaim oleh satu qrisId
 export async function verifyPayment(
+  DB: Db,
   amount: unknown,
   startTime: unknown,
   merchantIdOverride: string | null = null,
   userAgent: string | null = null,
   qrisId: string | null = null,
 ) {
-  const rawTransactions = await fetchTransactionsWithRetry({
+  const rawTransactions = await fetchTransactionsWithRetry(DB, {
     startTime: startTime ? (startTime as number) : undefined,
     merchantIdOverride,
     userAgent: userAgent || undefined,
@@ -183,11 +176,12 @@ export async function verifyPayment(
     const txId = tx.id || tx.order_id || tx.wallstreet_transaction_id;
 
     if (txAmount === targetAmount && txTimestamp >= filterStartTimeMs) {
-      const existingClaim = await getClaim(txId);
+      const existingClaim = await getClaim(DB, txId);
 
       if (!existingClaim) {
-        if (await claimTx(txId, qrisId)) {
-          insertLog(
+        if (await claimTx(DB, txId, qrisId)) {
+          await insertLog(
+            DB,
             "INFO",
             `TRX ${txId} diklaim oleh QRIS ${qrisId || "manual-check"}`,
           );
@@ -202,7 +196,6 @@ export async function verifyPayment(
           };
         }
       } else if (qrisId && existingClaim.qris_id === qrisId) {
-        // Re-check dari QRIS yang sama → kembalikan hasil yang sudah diklaim
         return {
           transaction_id: txId,
           order_id: tx.order_id,
@@ -213,8 +206,8 @@ export async function verifyPayment(
           transaction_time: tx.transaction_time || tx.settlement_time,
         };
       } else {
-        // Transaksi ini sudah diklaim oleh QRIS lain → skip, cari transaksi berikutnya
-        insertLog(
+        await insertLog(
+          DB,
           "INFO",
           `TRX ${txId} sudah diklaim oleh QRIS ${existingClaim.qris_id || "lain"}, skip untuk QRIS ${qrisId}`,
         );

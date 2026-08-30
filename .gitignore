@@ -1,6 +1,10 @@
 node_modules/
 .env
+.dev.vars
 .gopay_cache.json
+.wrangler/
+.wrangler-dist/
+worker-configuration.d.ts
 *.log
 *.raw.js
 obfuscate.js

@@ -1,13 +1,11 @@
-// GoBiz OTP login
 import { goBizHeaders, buildSession, saveSession } from "./sessionManager";
-import { randomUUID } from "node:crypto";
+import type { Db } from "../db/client";
 
 export const GOBIZ_TOKEN_URL = "https://api.gobiz.co.id/goid/token";
 export const GOBIZ_OTP_URL = "https://api.gobiz.co.id/goid/login/request";
 export const GOBIZ_CONFIG_URL =
   "https://api.gobiz.co.id/goresto/v5/public/users/config";
 
-// Cari field pertama yang terisi dari daftar kandidat path (deep-scan best-effort).
 function pick(obj: unknown, keys: string[]): unknown {
   const candidates = Array.isArray(obj) ? obj : [obj];
   for (const cand of candidates) {
@@ -20,18 +18,17 @@ function pick(obj: unknown, keys: string[]): unknown {
   }
   return undefined;
 }
+
 export function extractConfig(data: Record<string, unknown>) {
   const merchant = asRecord(data.merchant);
   const merchants = Array.isArray(data.merchants) ? data.merchants : [];
   const firstMerchant = asRecord(merchants[0]);
-
   const merchantId =
     (pick(merchant, ["merchant_id", "id"]) as string) ??
     (pick(firstMerchant, ["merchant_id", "id"]) as string) ??
     (asString(data.merchant_id) ?? null);
-
   const outletName =
-    (pick(merchant.outlets, ["name"]) as string) ??
+    (pick(merchant.outlets as Record<string, unknown>, ["name"]) as string | undefined) ??
     (pick(firstMerchant.outlets, ["name"]) as string) ??
     (pick(asRecord(data.outlets), ["name"]) as string) ??
     (asString(asRecord(data.outlet).name) ?? null) ??
@@ -39,7 +36,6 @@ export function extractConfig(data: Record<string, unknown>) {
     (asString(merchant.name) ?? null) ??
     (asString(firstMerchant.name) ?? null) ??
     null;
-
   return { merchantId, outletName };
 }
 
@@ -51,7 +47,6 @@ function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
-// Normalisasi nomor: "081234567890" -> { phone: "81234567890", country: "62", display: "+6281234567890" }
 export function normalizePhone(input: string) {
   let digits = input.replace(/\D/g, "");
   if (digits.startsWith("0")) digits = digits.slice(1);
@@ -60,7 +55,6 @@ export function normalizePhone(input: string) {
   return { phone, country, display: `+${country}${phone}` };
 }
 
-// Throw error dengan pesan friendly + status HTTP (biar bukan 500 semua)
 function goBizError(res: Response, json: any, fallback: string): never {
   const e = json?.errors?.[0];
   const msg = e?.message || e?.message_title || fallback;
@@ -69,10 +63,9 @@ function goBizError(res: Response, json: any, fallback: string): never {
   throw err;
 }
 
-// Request OTP ke nomor HP. Return otp_token + uniqueId (dipakai verify OTP).
 export async function requestOtp(phoneInput: string) {
   const { phone, country } = normalizePhone(phoneInput);
-  const uniqueId = randomUUID();
+  const uniqueId = crypto.randomUUID();
   const res = await fetch(GOBIZ_OTP_URL, {
     method: "POST",
     headers: goBizHeaders(uniqueId),
@@ -86,17 +79,16 @@ export async function requestOtp(phoneInput: string) {
   if (!res.ok) {
     goBizError(res, json, `Gagal mengirim OTP (HTTP ${res.status})`);
   }
-  // otp_token diambil dari body response; fallback ke cookie bila tidak ada.
   const otpToken = json?.data?.otp_token ?? res.headers.get("set-cookie") ?? "";
   return { otpToken, expiresIn: json?.data?.expiry ?? 720, uniqueId };
 }
 
-// Verifikasi OTP + ambil info merchant + simpan sesi. Return session.
 export async function verifyOtp(
   phoneInput: string,
   otp: string,
   otpToken: string,
   uniqueId?: string,
+  DB?: Db,
 ) {
   const { display } = normalizePhone(phoneInput);
 
@@ -112,11 +104,7 @@ export async function verifyOtp(
   const tokenRes: any = await tokenReq.json().catch(() => ({}));
   const tokenData = tokenRes?.data ?? tokenRes;
   if (!tokenReq.ok || !tokenData?.access_token) {
-    goBizError(
-      tokenReq,
-      tokenRes,
-      `Verifikasi OTP gagal (HTTP ${tokenReq.status})`,
-    );
+    goBizError(tokenReq, tokenRes, `Verifikasi OTP gagal (HTTP ${tokenReq.status})`);
   }
 
   let merchantId: string | null = null;
@@ -131,14 +119,13 @@ export async function verifyOtp(
     const cfg = (await cfgRes.json().catch(() => ({}))) as Record<string, unknown>;
     const rawData: unknown = cfg?.data;
     const extracted = extractConfig(
-      (rawData != null && typeof rawData === "object"
+      rawData != null && typeof rawData === "object"
         ? (rawData as Record<string, unknown>)
-        : cfg),
+        : cfg,
     );
     merchantId = extracted.merchantId;
     outletName = extracted.outletName;
   } catch {
-    // Abaikan — config opsional, fallback dipakai.
   }
 
   const session = buildSession({
@@ -148,6 +135,6 @@ export async function verifyOtp(
     merchant_id: merchantId,
     outlet_name: outletName ?? "Merchant GoPay",
   });
-  await saveSession(session);
+  if (DB) await saveSession(DB, session);
   return session;
 }

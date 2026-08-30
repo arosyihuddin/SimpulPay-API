@@ -1,0 +1,24 @@
+name = "gomerch-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[durable_objects]
+bindings = [{ name = "MERCHANT_WS", class_name = "MerchantWS" }]
+
+# Loader untuk import template ?raw (qr.html, expired.html)
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "441c52770a4b49a7a8c4bc9d9a3ed93a"
+
+[exports.MerchantWS]
+type = "durable-object"
+storage = "sqlite"
+
+[triggers]
+crons = ["0 * * * *", "0 */6 * * *"]

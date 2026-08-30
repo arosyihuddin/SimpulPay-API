@@ -1,22 +1,20 @@
-// QRIS EMVCo generation
 import { getSetting, setSetting } from '../db/queries';
-const QRIS_EXPIRY_MS = 5 * 60 * 1000; // 5 menit
+import type { Db } from '../db/client';
+const QRIS_EXPIRY_MS = 5 * 60 * 1000;
 
-// QRIS static & merchant ID: sumber DB (di-set via UI Settings)
-export async function getQrisStatic(): Promise<string> {
-  return (await getSetting('qris_static')) || '';
+export async function getQrisStatic(DB: Db): Promise<string> {
+  return (await getSetting(DB, 'qris_static')) || '';
 }
-export async function setQrisStatic(code: string): Promise<void> {
-  await setSetting('qris_static', code);
+export async function setQrisStatic(DB: Db, code: string): Promise<void> {
+  await setSetting(DB, 'qris_static', code);
 }
-export async function getMerchantId(): Promise<string> {
-  return (await getSetting('gopay_merchant_id')) || '';
+export async function getMerchantId(DB: Db): Promise<string> {
+  return (await getSetting(DB, 'gopay_merchant_id')) || '';
 }
-export async function setMerchantId(id: string): Promise<void> {
-  await setSetting('gopay_merchant_id', id);
+export async function setMerchantId(DB: Db, id: string): Promise<void> {
+  await setSetting(DB, 'gopay_merchant_id', id);
 }
 
-// Parse EMVCo TLV jadi map tag → value
 export function parseQrisTlv(payload: string): Record<string, string> {
   const out: Record<string, string> = {};
   let i = 0;
@@ -31,7 +29,6 @@ export function parseQrisTlv(payload: string): Record<string, string> {
   return out;
 }
 
-// Hitung Checksum CRC16 EMVCo untuk QRIS
 export function calculateCRC16(payload: string) {
   let crc = 0xffff;
   for (let i = 0; i < payload.length; i++) {
@@ -47,18 +44,15 @@ export function calculateCRC16(payload: string) {
   return crc.toString(16).toUpperCase().padStart(4, '0');
 }
 
-// Generate QRIS Dinamis Standar EMVCo (Parsing TLV Presisi Tinggi)
 export function generateDynamicQRIS(staticTemplate: string, amount: unknown) {
   if (!staticTemplate) return null;
   let payload = staticTemplate.trim();
 
-  // Hapus Tag 63 (CRC) lama jika ada di akhir
   const idx63 = payload.indexOf('6304');
   if (idx63 !== -1) {
     payload = payload.substring(0, idx63);
   }
 
-  // Parse EMVCo TLV Tags
   const tags: { tag: string; val: string }[] = [];
   let i = 0;
   try {
@@ -80,7 +74,6 @@ export function generateDynamicQRIS(staticTemplate: string, amount: unknown) {
 
   for (const item of tags) {
     if (item.tag === '01') {
-      // Ubah Static (11) ke Dynamic (12)
       newTags.push({ tag: '01', val: '12' });
     } else if (item.tag === '54') {
       newTags.push({ tag: '54', val: amountStr });
@@ -113,9 +106,6 @@ export function qrisExpiryMs() {
   return QRIS_EXPIRY_MS;
 }
 
-// Nominal unik per QRIS: base + kode acak → dua user bayar nominal sama tetep beda QRIS.
-// Customer bayar `pay`, bukan `base`. Kode skala ikut nominal (~1%), range 9..100.
-// ponytail: base <100 cuma 9 variasi → tabrakan mungkin; migrasi GoBiz create-transaction kalau butuh pasti unik.
 export function uniqueAmount(base: number): { base: number; code: number; pay: number } {
   const maxCode = Math.min(100, Math.max(9, Math.round(base * 0.01)));
   const code = Math.floor(Math.random() * maxCode) + 1;

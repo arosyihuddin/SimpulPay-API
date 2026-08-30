@@ -1,8 +1,37 @@
-// Controller admin: handler untuk semua endpoint /admin (login, dashboard, settings, otp)
-import * as path from "node:path";
-import { randomBytes, randomUUID } from "node:crypto";
-import * as pg from "pg";
-import { PG_SCHEMA_SQL } from "../db/client";
+import { ADMIN_TTL_MS, getApiKey } from "../middleware/guards";
+import {
+  cookieToken,
+  hashPassword,
+  verifyPassword,
+} from "../utils/auth.helper";
+import {
+  insertQRIS,
+  listQRIS,
+  countQRIS,
+  markQRISExpired,
+  insertLog,
+  recentLogs,
+  countLogs,
+  createAdminSession,
+  deleteAdminSession,
+  getAdminSession,
+  deleteGoBizSession,
+  setSetting,
+} from "../db/queries";
+import {
+  listUsers,
+  getUserById,
+  getUserByUsername,
+  createUser,
+  updateUser,
+  updateUserPassword,
+  deleteUser,
+  countUsers,
+} from "../db/repositories/user.repository";
+import type { Context } from "hono";
+import type { Db } from "../db/client";
+import type { AppEnv } from "../types";
+import { getDb } from "../db/client";
 import {
   loadSession,
   isExpired,
@@ -25,72 +54,27 @@ import {
   formatTransaction,
   toRupiah,
 } from "../services/gojek";
-import {
-  insertQRIS,
-  listQRIS,
-  countQRIS,
-  markQRISExpired,
-  insertLog,
-  recentLogs,
-  countLogs,
-  createAdminSession,
-  deleteAdminSession,
-  getAdminSession,
-  deleteGoBizSession,
-  setSetting,
-  getUserByUsername,
-  createUser,
-  countUsers,
-  updateUserPassword,
-} from "../db/queries";
-import {
-  ADMIN_COOKIE,
-  ADMIN_TTL_MS,
-  getApiKey,
-  adminOk,
-} from "../middleware/guards";
 import { broadcast } from "../services/realtime";
-import {
-  cookieToken,
-  hashPassword,
-  verifyPassword,
-} from "../utils/auth.helper";
 
 const SESSION_MAX_AGE = ADMIN_TTL_MS / 1000;
 
-// Set-Cookie admin session. Deploy terpisah (frontend di host lain) butuh
-// SameSite=None + Secure supaya cookie terkirim cross-site. Default Lax
-// (same-origin aman, dev pakai http). Atur via env:
-//   COOKIE_SAMESITE=None COOKIE_SECURE=true
 function cookieHeader(token: string, maxAge: number): string {
-  const sameSite = process.env.COOKIE_SAMESITE || "Lax";
-  const secure = process.env.COOKIE_SECURE === "true" ? "; Secure" : "";
-  return `${ADMIN_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=${sameSite}${secure}; Max-Age=${maxAge}`;
+  const sameSite = "None";
+  const secure = "; Secure";
+  return `${"gopay_admin_session"}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=${sameSite}${secure}; Max-Age=${maxAge}`;
 }
-const authErr = () => {
-  const err: any = new Error("Tidak terautentikasi atau sesi berakhir");
-  err.status = 401;
+
+function bad(message: string, status = 400): never {
+  const err: any = new Error(message);
+  err.status = status;
   throw err;
-};
-
-function setEnvLine(lines: string[], key: string, value: string): void {
-  const i = lines.findIndex((l) => l.trim().startsWith(key + "="));
-  const line = `${key}=${value}`;
-  if (i >= 0) {
-    lines[i] = line;
-  } else {
-    const blank = lines.findIndex((l) => !l.trim());
-    if (blank >= 0) lines[blank] = line;
-    else lines.push(line);
-  }
 }
 
-// Ambil transaksi bulan ini dari Gojek (dipakai dashboard)
-async function fetchMonthTransactions() {
+async function fetchMonthTransactions(DB: Db) {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   try {
-    const raw = await fetchTransactionsWithRetry({
+    const raw = await fetchTransactionsWithRetry(DB, {
       startTime: startOfMonth.getTime(),
       endTime: now.getTime(),
       pageSize: 100,
@@ -101,135 +85,198 @@ async function fetchMonthTransactions() {
   }
 }
 
-function bad(message: string, status = 400): never {
-  const err: any = new Error(message);
-  err.status = status;
-  throw err;
+export async function setupStatus(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const needsSetup = (await countUsers(DB)) === 0;
+  return c.json({ needsSetup, configDone: true });
 }
 
-export async function setupStatus() {
-  const configDone = !!process.env.DB_DRIVER;
-  const needsSetup = Number(await countUsers()) === 0;
-  return { needsSetup, configDone };
-}
-
-export async function setupDb(body: any) {
-  const driver = body?.driver as string | undefined;
-  if (driver !== "sqlite" && driver !== "postgres")
-    bad("Driver harus 'sqlite' atau 'postgres'");
-  if (driver === "postgres" && !body?.url)
-    bad("DATABASE_URL wajib diisi untuk postgres");
-  const envPath = path.join(import.meta.dirname, "..", "..", ".env");
-  const fs = await import("node:fs");
-  let lines: string[] = [];
-  if (fs.existsSync(envPath))
-    lines = fs.readFileSync(envPath, "utf-8").split("\n");
-
-  if (driver === "postgres") {
-    const testPool = new pg.Pool({ connectionString: body.url, max: 1 });
-    try {
-      await testPool.query("SELECT 1");
-    } catch (err) {
-      bad(`Koneksi Postgres gagal: ${(err as Error).message}`, 400);
-    }
-    try {
-      for (const sql of PG_SCHEMA_SQL) await testPool.query(sql);
-    } catch (err) {
-      bad(`Migrasi skema Postgres gagal: ${(err as Error).message}`, 500);
-    } finally {
-      await testPool.end();
-    }
-  }
-
-  setEnvLine(lines, "DB_DRIVER", driver);
-  if (driver === "postgres") setEnvLine(lines, "DATABASE_URL", body.url);
-  else setEnvLine(lines, "DATABASE_PATH", "./data/gateway.db");
-  fs.writeFileSync(envPath, lines.join("\n") + "\n");
-  await insertLog("INFO", `Konfigurasi database disimpan: ${driver}`);
-  // Restart cuma wajib kalau pindah engine. First-run default-nya sqlite aktiv,
-  // jadi pilih sqlite bisa lanjut tanpa restart (DB yg lagi dipakai sudah sqlite).
-  const activeDriver = process.env.DB_DRIVER || "sqlite";
-  return { success: true, needsRestart: activeDriver !== driver, driver };
-}
-
-export async function setup(body: any, set: any) {
-  if ((await countUsers()) > 0)
+export async function setup(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
+  if ((await countUsers(DB)) > 0)
     bad("Setup sudah selesai. Logout lalu login.", 409);
   const username = (body?.username || "").trim();
   const password = body?.password || "";
   if (username.length < 3) bad("Username minimal 3 karakter");
   if (password.length < 8) bad("Password minimal 8 karakter");
-  await createUser({
-    id: randomUUID(),
+  const id = crypto.randomUUID();
+  await createUser(DB, {
+    id,
     username,
-    passwordHash: hashPassword(password),
+    passwordHash: await hashPassword(password),
+    role: "admin",
   });
-  const token = randomUUID();
-  await createAdminSession(token, ADMIN_TTL_MS);
+  const token = crypto.randomUUID();
+  await createAdminSession(DB, token, ADMIN_TTL_MS, id);
   await insertLog(
+    DB,
     "INFO",
     `Setup selesai: admin '${username}' dibuat. Login sukses.`,
   );
-  set.headers["Set-Cookie"] = cookieHeader(token, SESSION_MAX_AGE);
-  return { success: true };
+  c.header("Set-Cookie", cookieHeader(token, SESSION_MAX_AGE));
+  return c.json({ success: true });
 }
 
-export async function login(body: any, set: any) {
+export async function login(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
   const username = (body?.username || "").trim();
   const password = body?.password || "";
   if (!username || !password) bad("Username dan password wajib diisi", 401);
-  const user = await getUserByUsername(username);
-  if (!user || !verifyPassword(password, user.password_hash)) {
-    await insertLog("WARNING", "Percobaan login admin gagal");
+  const user = await getUserByUsername(DB, username);
+  if (!user || !(await verifyPassword(password, user.password_hash))) {
+    await insertLog(DB, "WARNING", "Percobaan login admin gagal");
     bad("Username atau password salah", 401);
   }
-  const token = randomUUID();
-  await createAdminSession(token, ADMIN_TTL_MS);
-  await insertLog("INFO", `Admin login sukses: ${username}`);
-  set.headers["Set-Cookie"] = cookieHeader(token, SESSION_MAX_AGE);
-  return { success: true };
+  const token = crypto.randomUUID();
+  await createAdminSession(DB, token, ADMIN_TTL_MS, user.id);
+  await insertLog(DB, "INFO", `Admin login sukses: ${username}`);
+  c.header("Set-Cookie", cookieHeader(token, SESSION_MAX_AGE));
+  return c.json({ success: true });
 }
 
-export async function logout(set: any, headers: any) {
-  const token = cookieToken({ headers });
+export async function logout(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const token = cookieToken(c);
   if (token) {
-    await deleteAdminSession(token);
-    await insertLog("INFO", "Admin logout");
+    await deleteAdminSession(DB, token);
+    await insertLog(DB, "INFO", "Admin logout");
   }
-  set.headers["Set-Cookie"] = cookieHeader("", 0);
-  return { success: true };
+  c.header("Set-Cookie", cookieHeader("", 0));
+  return c.json({ success: true });
 }
 
-export async function me(adminToken: any) {
-  const s = await getAdminSession(adminToken as string);
-  return {
+export async function me(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const token = c.get("adminToken") as string;
+  const s = await getAdminSession(DB, token);
+  const userCount = await countUsers(DB);
+  // role dari user pemilik sesi (fallback: sesi lama tanpa user_id => admin)
+  let role = "admin";
+  let username = null;
+  if (s?.user_id) {
+    const u = await getUserById(DB, s.user_id);
+    if (u) {
+      role = u.role;
+      username = u.username;
+    }
+  }
+  return c.json({
     success: true,
     data: {
       session_expires_at: s?.expires_at ?? null,
-      setup_done: (await countUsers()) > 0,
+      setup_done: userCount > 0,
+      role,
+      username,
     },
-  };
+  });
 }
 
-export async function changePassword(body: any) {
+export async function changePassword(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
   const username = (body?.username || "").trim();
   const oldPassword = body?.old_password || "";
   const newPassword = body?.new_password || "";
   if (!username || !oldPassword || !newPassword)
     bad("Username, password lama, dan password baru wajib diisi");
-  const user = await getUserByUsername(username);
-  if (!user || !verifyPassword(oldPassword, user.password_hash))
+  const user = await getUserByUsername(DB, username);
+  if (!user || !(await verifyPassword(oldPassword, user.password_hash)))
     bad("Password lama salah", 401);
   if (newPassword.length < 8) bad("Password baru minimal 8 karakter");
-  await updateUserPassword(user.id, hashPassword(newPassword));
-  await insertLog("INFO", `Password admin '${username}' diubah`);
-  return { success: true };
+  await updateUserPassword(DB, user.id, await hashPassword(newPassword));
+  await insertLog(DB, "INFO", `Password admin '${username}' diubah`);
+  return c.json({ success: true });
 }
 
-export async function dashboard() {
-  const session = await loadSession();
-  await markQRISExpired();
-  const qrisAll = await listQRIS(100);
+export async function listUsersCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const q = c.req.query();
+  const limit = parseInt((q.limit as string) || "50", 10);
+  const offset = parseInt((q.offset as string) || "0", 10);
+  const users = (await listUsers(DB, limit, offset)).map((u) => ({
+    id: u.id,
+    username: u.username,
+    role: u.role,
+    created_at: u.created_at,
+    updated_at: u.updated_at,
+  }));
+  return c.json({
+    success: true,
+    data: { users, total: await countUsers(DB) },
+  });
+}
+
+export async function createUserCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
+  const username = (body?.username || "").trim();
+  const password = body?.password || "";
+  const role = (body?.role || "user").trim();
+  if (username.length < 3) bad("Username minimal 3 karakter");
+  if (password.length < 8) bad("Password minimal 8 karakter");
+  if (await getUserByUsername(DB, username)) bad("Username sudah dipakai", 409);
+  if (!["admin", "user"].includes(role)) bad("Role harus 'admin' atau 'user'");
+  const id = crypto.randomUUID();
+  await createUser(DB, {
+    id,
+    username,
+    passwordHash: await hashPassword(password),
+    role,
+  });
+  await insertLog(DB, "INFO", `User dibuat: ${username} (${role})`);
+  return c.json({ success: true, data: { id } });
+}
+
+export async function updateUserCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const id = c.req.param("id") ?? "";
+  const existing = await getUserById(DB, id);
+  if (!existing) bad("User tidak ditemukan", 404);
+  const body = await c.req.json();
+  const patch: { username?: string; role?: string; passwordHash?: string } = {};
+  if (body?.username !== undefined) {
+    const username = String(body.username).trim();
+    if (username.length < 3) bad("Username minimal 3 karakter");
+    const dup = await getUserByUsername(DB, username);
+    if (dup && dup.id !== id) bad("Username sudah dipakai", 409);
+    patch.username = username;
+  }
+  if (body?.role !== undefined) {
+    const role = String(body.role).trim();
+    if (!["admin", "user"].includes(role))
+      bad("Role harus 'admin' atau 'user'");
+    patch.role = role;
+  }
+  if (body?.password) {
+    if (String(body.password).length < 8) bad("Password minimal 8 karakter");
+    patch.passwordHash = await hashPassword(String(body.password));
+  }
+  await updateUser(DB, id, patch);
+  await insertLog(DB, "INFO", `User diubah: ${existing.username}`);
+  return c.json({ success: true });
+}
+
+export async function deleteUserCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const id = c.req.param("id") ?? "";
+  const existing = await getUserById(DB, id);
+  if (!existing) bad("User tidak ditemukan", 404);
+  // cegah admin menghapus dirinya sendiri
+  const s = await getAdminSession(DB, c.get("adminToken") as string);
+  if (s?.user_id === id)
+    bad("Tidak bisa menghapus akun yang sedang dipakai", 409);
+  await deleteUser(DB, id);
+  await insertLog(DB, "INFO", `User dihapus: ${existing.username}`);
+  return c.json({ success: true });
+}
+
+export async function dashboard(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const session = await loadSession(DB);
+  await markQRISExpired(DB);
+  const qrisAll = await listQRIS(DB, 100);
   const now = Date.now();
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -239,7 +286,7 @@ export async function dashboard() {
   const activeQris = qrisAll.filter(
     (q) => q.status === "PENDING" && q.expires_at > now,
   ).length;
-  const tx = await fetchMonthTransactions();
+  const tx = await fetchMonthTransactions(DB);
   const monthIncome = tx.success
     ? tx.raw.reduce(
         (sum: number, t: any) =>
@@ -247,7 +294,7 @@ export async function dashboard() {
         0,
       )
     : null;
-  return {
+  return c.json({
     success: true,
     data: {
       stats: {
@@ -269,29 +316,30 @@ export async function dashboard() {
         : { exists: false },
       month_fetch_error: tx.message ?? null,
     },
-  };
+  });
 }
 
-export async function createQris(body: any) {
+export async function createQris(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
   const amount = body?.amount;
   if (!amount || isNaN(Number(amount)) || Number(amount) <= 0)
     bad("Nominal pembayaran tidak valid");
-  const staticTemplate = await getQrisStatic();
+  const staticTemplate = await getQrisStatic(DB);
   if (!staticTemplate)
     bad(
       "QRIS static belum dikonfigurasi. Upload QRIS static di Settings → Konfigurasi QRIS.",
       500,
     );
-  const st = staticTemplate as string;
   const base = parseInt(String(amount), 10);
   const { code, pay } = uniqueAmount(base);
-  const dynamicCode = generateDynamicQRIS(st, pay);
+  const dynamicCode = generateDynamicQRIS(staticTemplate, pay);
   const qrisId = Math.random().toString(36).substring(2, 10);
   const trxId =
     "TRX-" + Math.random().toString(36).substring(2, 10).toUpperCase();
   const now = Date.now();
   const expiresAt = now + qrisExpiryMs();
-  await insertQRIS({
+  await insertQRIS(DB, {
     id: qrisId,
     code: dynamicCode!,
     amount: pay,
@@ -302,15 +350,16 @@ export async function createQris(body: any) {
     expiresAt,
   });
   await insertLog(
+    DB,
     "INFO",
     `Admin buat QRIS | TRX-ID: ${trxId} | Rp ${base} (+${code})`,
   );
-  broadcast({
+  broadcast(c.env, {
     type: "qris_created",
     scope: "admin",
     data: { id: qrisId, status: "PENDING" },
   });
-  return {
+  return c.json({
     success: true,
     data: {
       qris_id: qrisId,
@@ -322,83 +371,99 @@ export async function createQris(body: any) {
       amount_to_pay: pay,
       expires_at: new Date(expiresAt).toISOString(),
     },
-  };
+  });
 }
 
-export async function listQris(query: any) {
-  const limit = parseInt((query.limit as string) || "50", 10);
-  const offset = parseInt((query.offset as string) || "0", 10);
-  await markQRISExpired();
-  return {
+export async function listQris(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const q = c.req.query();
+  const limit = parseInt((q.limit as string) || "50", 10);
+  const offset = parseInt((q.offset as string) || "0", 10);
+  await markQRISExpired(DB);
+  return c.json({
     success: true,
     data: {
-      qris: await listQRIS(limit, offset),
-      total: await countQRIS(),
+      qris: await listQRIS(DB, limit, offset),
+      total: await countQRIS(DB),
     },
-  };
+  });
 }
 
-export async function listTransactions(query: any) {
-  const tx = await fetchMonthTransactions();
-  if (!tx.success) return { success: false, data: { message: tx.message } };
+export async function listTransactions(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const q = c.req.query();
+  const tx = await fetchMonthTransactions(DB);
+  if (!tx.success)
+    return c.json({ success: false, data: { message: tx.message } });
   const total = tx.raw.length;
-  const pageSize = parseInt((query.pageSize as string) || "20", 10);
-  const page = parseInt((query.page as string) || "1", 10);
+  const pageSize = parseInt((q.pageSize as string) || "20", 10);
+  const page = parseInt((q.page as string) || "1", 10);
   const start = (page - 1) * pageSize;
   const formatted = tx.raw
     .slice(start, start + pageSize)
     .map(formatTransaction);
-  return { success: true, data: { transactions: formatted, total } };
+  return c.json({ success: true, data: { transactions: formatted, total } });
 }
 
-export async function listLogs(query: any) {
-  const limit = parseInt((query.limit as string) || "100", 10);
-  const offset = parseInt((query.offset as string) || "0", 10);
-  return {
+export async function listLogs(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const q = c.req.query();
+  const limit = parseInt((q.limit as string) || "100", 10);
+  const offset = parseInt((q.offset as string) || "0", 10);
+  return c.json({
     success: true,
     data: {
-      logs: await recentLogs(limit, offset),
-      total: await countLogs(),
+      logs: await recentLogs(DB, limit, offset),
+      total: await countLogs(DB),
     },
-  };
+  });
 }
 
-export async function settings() {
-  const apiKey = await getApiKey();
+export async function settings(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const apiKey = await getApiKey(DB);
   const mask = (v: string) => (v ? v.slice(0, 4) + "****" : "");
-  const st = await getQrisStatic();
-  return {
+  const st = await getQrisStatic(DB);
+  return c.json({
     success: true,
     data: {
-      port: process.env.PORT,
       api_key_set: !!apiKey,
       api_key_masked: mask(apiKey),
       api_key: apiKey,
       qris_static_set: !!st,
       qris_static_masked: st ? st.slice(0, 12) + "..." : "",
-      gopay_merchant_id: await getMerchantId(),
-      gobiz_session_exists: !!(await loadSession()),
-      database_path: process.env.DATABASE_PATH || "data/gateway.db",
+      gopay_merchant_id: await getMerchantId(DB),
+      gobiz_session_exists: !!(await loadSession(DB)),
     },
-  };
+  });
 }
 
-export async function apiKey(body: any) {
+export async function apiKey(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
   if (body?.action === "delete") {
-    await setSetting("api_key", "");
-    await insertLog("INFO", "API key dihapus");
-    return { success: true, data: { api_key_set: false } };
+    await setSetting(DB, "api_key", "");
+    await insertLog(DB, "INFO", "API key dihapus");
+    return c.json({ success: true, data: { api_key_set: false } });
   }
-  const key = "gm_" + randomBytes(32).toString("hex");
-  await setSetting("api_key", key);
-  await insertLog("INFO", "API key digenerate baru");
-  return {
+  const key =
+    "gm_" + bufToHex(crypto.getRandomValues(new Uint8Array(32)).buffer);
+  await setSetting(DB, "api_key", key);
+  await insertLog(DB, "INFO", "API key digenerate baru");
+  return c.json({
     success: true,
     data: { api_key: key, api_key_masked: key.slice(0, 4) + "****" },
-  };
+  });
 }
 
-export async function qrisParse(body: any) {
+function bufToHex(buf: ArrayBuffer): string {
+  return [...new Uint8Array(buf)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export async function qrisParse(c: Context<AppEnv>) {
+  const body = await c.req.json();
   const image = body?.image as string | undefined;
   if (!image) bad("Gambar QRIS (base64) wajib dikirim");
   const decoded = await decodeQRCodeFromImage(image);
@@ -409,7 +474,7 @@ export async function qrisParse(body: any) {
   const sub = parseQrisTlv(merchantInfo);
   const merchantId =
     Object.values(sub).find((v) => /^G\d{9}$/.test(v)) || merchantInfo;
-  return {
+  return c.json({
     success: true,
     data: {
       code: decoded,
@@ -418,42 +483,52 @@ export async function qrisParse(body: any) {
       city: tlv["60"],
       type: tlv["01"] === "11" ? "static" : "dynamic",
     },
-  };
+  });
 }
 
-export async function qrisStatic(body: any) {
+export async function qrisStatic(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
   const code = body?.code as string | undefined;
   if (!code) bad("Kode QRIS wajib dikirim");
-  await setQrisStatic(code);
+  await setQrisStatic(DB, code);
   await insertLog(
+    DB,
     "INFO",
     `QRIS static di-update via Settings (${code.slice(0, 12)}...)`,
   );
-  return { success: true };
+  return c.json({ success: true });
 }
 
-export async function merchantId(body: any) {
+export async function merchantId(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
   const id = body?.merchant_id as string | undefined;
   if (!id) bad("Merchant ID wajib dikirim");
-  await setMerchantId(id);
-  await insertLog("INFO", `Merchant ID di-update via Settings (${id})`);
-  return { success: true };
+  await setMerchantId(DB, id);
+  await insertLog(DB, "INFO", `Merchant ID di-update via Settings (${id})`);
+  return c.json({ success: true });
 }
 
-export async function otpRequest(body: any) {
+export async function otpRequest(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
   if (!body?.phone) bad("Nomor HP wajib diisi");
   const { otpToken, expiresIn, uniqueId } = await requestOtp(body.phone);
   await insertLog(
+    DB,
     "INFO",
     `OTP dikirim ke ${normalizePhone(body.phone).display}`,
   );
-  return {
+  return c.json({
     success: true,
     data: { otp_token: otpToken, expires_in: expiresIn, unique_id: uniqueId },
-  };
+  });
 }
 
-export async function otpVerify(body: any) {
+export async function otpVerify(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
   if (!body?.phone || !body?.otp || !body?.otp_token)
     bad("phone, otp, otp_token wajib diisi");
   const session = await verifyOtp(
@@ -461,12 +536,14 @@ export async function otpVerify(body: any) {
     body.otp,
     body.otp_token,
     body.unique_id,
+    DB,
   );
   await insertLog(
+    DB,
     "SUCCESS",
     `Login GoBiz berhasil | ${session.phone_number} | ${session.outlet_name}`,
   );
-  return {
+  return c.json({
     success: true,
     data: {
       phone_number: session.phone_number,
@@ -474,31 +551,27 @@ export async function otpVerify(body: any) {
       outlet_name: session.outlet_name,
       expires_at: session.expires_at,
     },
-  };
+  });
 }
 
-export async function refreshSessionCtl() {
-  const session = await loadSession();
+export async function refreshSessionCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const session = await loadSession(DB);
   if (!session || !session.refresh_token)
     bad("Tidak ada sesi GoBiz untuk di-refresh. Login dulu.");
-  const refreshed = await refreshSession();
+  const refreshed = await refreshSession(DB);
   if (!refreshed) bad("Auto-refresh gagal. Login ulang diperlukan.", 502);
-  await insertLog("INFO", "Admin memicu auto-refresh sesi GoBiz");
-  return { success: true, data: { expires_at: refreshed.expires_at } };
+  await insertLog(DB, "INFO", "Admin memicu auto-refresh sesi GoBiz");
+  return c.json({ success: true, data: { expires_at: refreshed.expires_at } });
 }
 
-export async function deleteGoBizCtl() {
-  await deleteGoBizSession();
+export async function deleteGoBizCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  await deleteGoBizSession(DB);
   await insertLog(
+    DB,
     "INFO",
     "Sesi GoBiz dihapus admin. Diperlukan login OTP ulang.",
   );
-  return { success: true };
-}
-
-// Guard: middleware autentikasi cookie admin (dipakai route)
-export async function deriveAdmin(ctx: any) {
-  const token = cookieToken(ctx);
-  if (!(await adminOk(token))) authErr();
-  return { adminToken: token };
+  return c.json({ success: true });
 }

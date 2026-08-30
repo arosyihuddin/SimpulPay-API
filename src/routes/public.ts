@@ -1,11 +1,9 @@
-// Public routes: halaman QRIS customer + cek status (handler di controller)
-import { Elysia } from "elysia";
+import { Hono } from "hono";
+import type { AppEnv } from "../types";
 import { health, apiHealth, qrPage, qrStatus } from "../controllers/public.controller";
 
-export const publicRoutes = new Elysia({ prefix: "" })
+export const publicRoutes = new Hono<AppEnv>()
   .get("/health", health)
   .get("/api/health", apiHealth)
-  .get("/qr/:id", async ({ params, query }) => qrPage(params, query))
-  .get("/api/qr-status/:id", async ({ params, headers }) =>
-    qrStatus(params.id, headers),
-  );
+  .get("/qr/:id", qrPage)
+  .get("/api/qr-status/:id", qrStatus);

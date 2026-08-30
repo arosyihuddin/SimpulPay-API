@@ -1,29 +1,71 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
+import { getCookie } from "hono/cookie";
+import type { Context } from "hono";
 import { ADMIN_COOKIE } from "../middleware/guards";
 
-const SALT = 16;
-export function hashPassword(password: string): string {
-  const salt = randomBytes(SALT).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
+const SALT_LEN = 16;
+const ITERATIONS = 100_000;
+const KEY_LEN_BITS = 512;
+
+function bufToHex(buf: ArrayBuffer): string {
+  return [...new Uint8Array(buf)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
-export function verifyPassword(password: string, stored: string): boolean {
-  const [salt, hash] = stored.split(":");
-  if (!salt || !hash) return false;
-  const candidate = scryptSync(password, salt, 64);
-  const expected = Buffer.from(hash, "hex");
-  return (
-    candidate.length === expected.length && timingSafeEqual(candidate, expected)
+function hexToUint8(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+async function deriveKey(
+  password: string,
+  salt: Uint8Array,
+): Promise<ArrayBuffer> {
+  const enc = new TextEncoder().encode(password);
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc,
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  return crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: salt as unknown as BufferSource,
+      iterations: ITERATIONS,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    KEY_LEN_BITS,
   );
 }
 
-export function cookieToken(ctx: any): string | null {
-  const raw = ctx.headers.cookie;
-  if (!raw) return null;
-  for (const part of raw.split(";")) {
-    const [k, ...rest] = part.trim().split("=");
-    if (k === ADMIN_COOKIE) return decodeURIComponent(rest.join("="));
-  }
-  return null;
+export async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
+  const hash = await deriveKey(password, salt);
+  return `${bufToHex(salt.buffer)}:${bufToHex(hash)}`;
+}
+
+export async function verifyPassword(
+  password: string,
+  stored: string,
+): Promise<boolean> {
+  const [saltHex, hashHex] = stored.split(":");
+  if (!saltHex || !hashHex) return false;
+  const candidate = await deriveKey(password, hexToUint8(saltHex));
+  const expected = hexToUint8(hashHex);
+  const cand = new Uint8Array(candidate);
+  if (cand.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < cand.length; i++) diff |= cand[i] ^ expected[i];
+  return diff === 0;
+}
+
+export function cookieToken(c: Context): string | null {
+  const raw = getCookie(c, ADMIN_COOKIE);
+  return raw ? decodeURIComponent(raw) : null;
 }

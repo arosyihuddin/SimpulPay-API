@@ -1,38 +1,57 @@
-// Guard API key (publik) & sesi admin (cookie httpOnly)
-import { getAdminSession, cleanExpiredSessions } from '../db/queries';
-import { getSetting } from '../db/queries';
+import type { Context, MiddlewareHandler } from "hono";
+import {
+  cleanExpiredSessions,
+  getAdminSession,
+  getSetting,
+} from "../db/queries";
+import { getDb, type Db } from "../db/client";
+import { fail } from "./errorHandler";
+import type { AppEnv } from "../types";
 
-export const ADMIN_COOKIE = 'gopay_admin_session';
-export const ADMIN_TTL_MS = 24 * 60 * 60 * 1000; // 24 jam
+export const ADMIN_COOKIE = "gopay_admin_session";
+export const ADMIN_TTL_MS = 24 * 60 * 60 * 1000;
 
-function first(v: unknown): unknown {
-  return Array.isArray(v) ? v[0] : v;
-}
-
-// Ambil API key dari header X-Api-Key / Authorization Bearer, atau query api_key/apikey
-export function extractApiKey(ctx: { headers: Record<string, string | undefined>; query: Record<string, unknown> }): string | null {
-  const auth = ctx.headers['authorization'];
-  if (auth && /^Bearer\s+/i.test(auth)) return auth.replace(/^Bearer\s+/i, '').trim();
+export function extractApiKey(c: Context<AppEnv>): string | null {
+  const auth = c.req.header("authorization");
+  if (auth && /^Bearer\s+/i.test(auth))
+    return auth.replace(/^Bearer\s+/i, "").trim();
+  const q = c.req.query();
   return (
-    ctx.headers['x-api-key'] ??
-    (first(ctx.query.api_key) as string) ??
-    (first(ctx.query.apikey) as string) ??
+    c.req.header("x-api-key") ??
+    (q.api_key as string | undefined) ??
+    (q.apikey as string | undefined) ??
     null
   );
 }
 
-export async function getApiKey(): Promise<string> {
-  return (await getSetting('api_key')) || '';
+export async function getApiKey(DB: Db): Promise<string> {
+  return (await getSetting(DB, "api_key")) || "";
 }
-export async function apiKeyOk(key: string | null): Promise<boolean> {
-  const expected = await getApiKey();
+export async function apiKeyOk(DB: Db, key: string | null): Promise<boolean> {
+  const expected = await getApiKey(DB);
   return !!expected && key === expected;
 }
 
-// true bila token admin valid & belum kedaluwarsa
-export async function adminOk(token: string | null | undefined): Promise<boolean> {
+export async function adminOk(
+  DB: Db,
+  token: string | null | undefined,
+): Promise<boolean> {
   if (!token) return false;
-  await cleanExpiredSessions();
-  const s = await getAdminSession(token);
+  await cleanExpiredSessions(DB);
+  const s = await getAdminSession(DB, token);
   return !!s && s.expires_at > Date.now();
 }
+
+export const apiKeyGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const key = extractApiKey(c);
+  if (!(await apiKeyOk(getDb(c), key)))
+    fail(401, "Autentikasi Gagal: API Key tidak valid");
+  await next();
+};
+
+export const adminGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const token = c.get("adminToken");
+  if (!(await adminOk(getDb(c), token)))
+    fail(401, "Tidak terautentikasi atau sesi berakhir");
+  await next();
+};

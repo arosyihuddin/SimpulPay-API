@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto';
 import { saveGoBizSession, loadGoBizSession } from '../db/queries';
+import type { Db } from '../db/client';
 
 const GOBIZ_TOKEN_URL = 'https://api.gobiz.co.id/goid/token';
 
-const ACCESS_TTL_MS = 24 * 3600 * 1000; // 24 jam
+const ACCESS_TTL_MS = 24 * 3600 * 1000;
 
 export const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36';
@@ -20,8 +20,6 @@ export interface Session {
   [key: string]: unknown;
 }
 
-// Header set go-biz web dashboard (origin https://portal.gofoodmerchant.co.id)
-// uniqueId: optional — pass same value across request+verify so GoBiz sees consistent session
 export function goBizHeaders(uniqueId?: string) {
   return {
     Accept: 'application/json, text/plain, */*',
@@ -39,15 +37,12 @@ export function goBizHeaders(uniqueId?: string) {
     'x-phonemake': 'Windows 10 64-bit',
     'x-phonemodel': 'Chrome 150.0.0.0 on Windows 10 64-bit',
     'x-platform': 'Web',
-    'x-uniqueid': uniqueId ?? randomUUID(),
+    'x-uniqueid': uniqueId ?? crypto.randomUUID(),
     'x-user-locale': 'en-GB',
     'x-user-type': 'merchant',
   };
 }
 
-// Bangun objek sesi lengkap: hitung cookie, updated_at, expires_at.
-// `extra` di-spread dulu (mis. field merchant_name/mobile lama dipertahankan),
-// lalu field canonical menimpa.
 export function buildSession(input: {
   access_token: string;
   refresh_token: string;
@@ -71,7 +66,7 @@ export function buildSession(input: {
   };
 }
 
-export async function saveSession(session: Session): Promise<void> {
+export async function saveSession(DB: Db, session: Session): Promise<void> {
   const data = {
     phone_number: session.phone_number ?? null,
     merchant_id: session.merchant_id ?? null,
@@ -82,29 +77,27 @@ export async function saveSession(session: Session): Promise<void> {
     updated_at: session.updated_at ?? null,
     expires_at: session.expires_at ?? null,
   };
-  await saveGoBizSession(data as Record<string, unknown>);
+  await saveGoBizSession(DB, data as Record<string, unknown>);
   console.log('[SessionManager] Sesi berhasil diperbarui dan disimpan ke database.');
 }
 
-export async function loadSession(): Promise<Session | null> {
+export async function loadSession(DB: Db): Promise<Session | null> {
   try {
-    const data = await loadGoBizSession();
+    const data = await loadGoBizSession(DB);
     return data as Session | null;
   } catch {
     return null;
   }
 }
 
-// true jika tak ada sesi/token atau expires_at sudah lewat.
-// Jika expires_at tidak ada, dianggap valid (bukan expired).
 export function isExpired(session: Session | null | undefined): boolean {
   if (!session || !session.access_token) return true;
   if (!session.expires_at) return false;
   return new Date(session.expires_at).getTime() < Date.now();
 }
 
-export async function refreshSession(): Promise<Session | null> {
-  const session = await loadSession();
+export async function refreshSession(DB: Db): Promise<Session | null> {
+  const session = await loadSession(DB);
   if (!session || !session.refresh_token) {
     console.log('[SessionManager] Refresh token tidak ditemukan. Diperlukan login ulang (Settings → Login GoBiz).');
     return null;
@@ -134,7 +127,7 @@ export async function refreshSession(): Promise<Session | null> {
       refresh_token: data.refresh_token ?? (session.refresh_token as string),
       extra: { ...session },
     });
-    await saveSession(updated);
+    await saveSession(DB, updated);
     console.log('[SessionManager] Auto-refresh token BERHASIL! Token baru telah ditulis ke database.');
     return updated;
   } catch (err) {
@@ -143,9 +136,9 @@ export async function refreshSession(): Promise<Session | null> {
   }
 }
 
-let lastMissingWarn = 0; // throttle log sesi belum ada (1×/menit)
-export async function getValidHeaders(userAgent?: string): Promise<Record<string, string> | null> {
-  let session = await loadSession();
+let lastMissingWarn = 0;
+export async function getValidHeaders(DB: Db, userAgent?: string): Promise<Record<string, string> | null> {
+  let session = await loadSession(DB);
   if (!session || !session.access_token) {
     const now = Date.now();
     if (now - lastMissingWarn > 60_000) {
@@ -157,7 +150,7 @@ export async function getValidHeaders(userAgent?: string): Promise<Record<string
 
   if (isExpired(session)) {
     console.log('[SessionManager] Token terdeteksi kadaluwarsa, mencoba refresh otomatis...');
-    const refreshed = await refreshSession();
+    const refreshed = await refreshSession(DB);
     if (refreshed) session = refreshed;
   }
 
