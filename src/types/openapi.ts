@@ -90,11 +90,7 @@ export const logsRes = okRes.extend({
 
 export const merchantStatusRes = okRes.extend({
   data: z.object({
-    merchant_id: z.string().nullable(),
-    qris_static_set: z.boolean(),
-    gobiz_session_exists: z.boolean(),
-    token_status: z.enum(["valid", "invalid"]),
-    message: z.string(),
+    active: z.boolean(),
   }),
 });
 

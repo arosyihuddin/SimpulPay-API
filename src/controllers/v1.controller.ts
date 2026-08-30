@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import type { AppEnv } from "../types";
 import { getDb } from "../db/client";
-import { getValidHeaders, loadSession, isExpired } from "../services/sessionManager";
+import { getValidHeaders } from "../services/sessionManager";
 import {
   generateDynamicQRIS,
   qrisExpiryMs,
@@ -34,34 +34,13 @@ export async function health(c: Context<AppEnv>) {
 
 export async function merchantStatus(c: Context<AppEnv>) {
   const DB = getDb(c);
-  const merchantId = c.get("merchantId");
-  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
-  const merchant = await getMerchant(DB, merchantId);
+  const id = c.req.param("id");
+  if (!id) fail(400, "merchant_id wajib di path");
+  const merchant = await getMerchant(DB, id);
   if (!merchant) fail(404, "Merchant tidak ditemukan");
-  const session = await loadSession(DB, merchantId);
-  let tokenStatus: "valid" | "invalid";
-  let message: string;
-  if (!session || !session.access_token) {
-    tokenStatus = "invalid";
-    message = "Sesi belum dikonfigurasi. Login OTP di dashboard.";
-  } else if (isExpired(session)) {
-    tokenStatus = "invalid";
-    message = "Sesi sudah kedaluwarsa. Login OTP ulang di dashboard.";
-  } else {
-    tokenStatus = "valid";
-    message = "Token dan sesi GoPay merchant aktif";
-  }
-  return c.json(
-    ok({
-      data: {
-        merchant_id: merchantId,
-        qris_static_set: !!merchant.qris_static,
-        gobiz_session_exists: !!session,
-        token_status: tokenStatus,
-        message,
-      },
-    }),
-  );
+  if (merchant.user_id !== c.get("userId"))
+    fail(403, "Akses ditolak: merchant bukan milik akun ini");
+  return c.json(ok({ data: { active: merchant.status === "active" } }));
 }
 
 export async function createQris(c: Context<AppEnv>) {
