@@ -1,9 +1,10 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { z } from "zod";
-import { apiKeyGuard } from "../middleware/guards";
+import { apiKeyGuard, merchantGuard } from "../middleware/guards";
 import type { AppEnv } from "../types";
 import {
   health,
+  merchantStatus,
   createQris,
   getQris,
   checkPayment,
@@ -14,6 +15,7 @@ import {
 } from "../controllers/v1.controller";
 import {
   v1HealthRes,
+  merchantStatusRes,
   createQrisReq,
   createQrisRes,
   getQrisRes,
@@ -27,6 +29,8 @@ import {
 
 const v1Routes = new OpenAPIHono<AppEnv>();
 v1Routes.use("*", apiKeyGuard);
+// merchantGuard: semua route v1 butuh merchant_id (query/header)
+v1Routes.use("*", merchantGuard);
 // Response schema cuma untuk spec OpenAPI — handler controller longgar.
 const reg: any = (route: any, handler: any) => v1Routes.openapi(route, handler);
 
@@ -39,6 +43,17 @@ reg(
     responses: { 200: { description: "OK", content: { "application/json": { schema: v1HealthRes } } } },
   }),
   health,
+);
+
+reg(
+  createRoute({
+    method: "get",
+    path: "/merchant-status",
+    tags: ["API v1"],
+    summary: "Status merchant (sesi, token, QRIS static)",
+    responses: { 200: { description: "Status merchant", content: { "application/json": { schema: merchantStatusRes } } } },
+  }),
+  merchantStatus,
 );
 
 reg(

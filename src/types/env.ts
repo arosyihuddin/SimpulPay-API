@@ -10,5 +10,10 @@ export interface Env {
 
 export type AppEnv = {
   Bindings: Env;
-  Variables: { adminToken: string | null; db: { client: Sql; db: Db } | null };
+  Variables: {
+    adminToken: string | null;
+    db: { client: Sql; db: Db } | null;
+    userId: string | null;
+    merchantId: string | null;
+  };
 };

@@ -1,4 +1,5 @@
 import { goBizHeaders, buildSession, saveSession } from "./sessionManager";
+import { updateMerchant } from "../db/queries";
 import type { Db } from "../db/client";
 
 export const GOBIZ_TOKEN_URL = "https://api.gobiz.co.id/goid/token";
@@ -19,22 +20,33 @@ function pick(obj: unknown, keys: string[]): unknown {
   return undefined;
 }
 
+function pickStr(obj: unknown, keys: string[]): string | undefined {
+  const v = pick(obj, keys);
+  return typeof v === "string" ? v : undefined;
+}
+
+// outlets di GoBiz bisa object tunggal atau array — normalisasi ke objek pertama.
+function firstOutlet(v: unknown): Record<string, unknown> {
+  const arr = Array.isArray(v) ? v : null;
+  return asRecord(arr?.[0] ?? v);
+}
+
 export function extractConfig(data: Record<string, unknown>) {
   const merchant = asRecord(data.merchant);
   const merchants = Array.isArray(data.merchants) ? data.merchants : [];
   const firstMerchant = asRecord(merchants[0]);
   const merchantId =
-    (pick(merchant, ["merchant_id", "id"]) as string) ??
-    (pick(firstMerchant, ["merchant_id", "id"]) as string) ??
+    pickStr(merchant, ["merchant_id", "id"]) ??
+    pickStr(firstMerchant, ["merchant_id", "id"]) ??
     (asString(data.merchant_id) ?? null);
   const outletName =
-    (pick(merchant.outlets as Record<string, unknown>, ["name"]) as string | undefined) ??
-    (pick(firstMerchant.outlets, ["name"]) as string) ??
-    (pick(asRecord(data.outlets), ["name"]) as string) ??
-    (asString(asRecord(data.outlet).name) ?? null) ??
-    (asString(data.outlet_name) ?? null) ??
-    (asString(merchant.name) ?? null) ??
-    (asString(firstMerchant.name) ?? null) ??
+    asString(firstOutlet(merchant["outlets"])["name"]) ??
+    asString(firstOutlet(firstMerchant["outlets"])["name"]) ??
+    asString(firstOutlet(data["outlets"])["name"]) ??
+    asString(asRecord(data["outlet"])["name"]) ??
+    asString(data["outlet_name"]) ??
+    asString(merchant["name"]) ??
+    asString(firstMerchant["name"]) ??
     null;
   return { merchantId, outletName };
 }
@@ -89,6 +101,7 @@ export async function verifyOtp(
   otpToken: string,
   uniqueId?: string,
   DB?: Db,
+  merchantId?: string,
 ) {
   const { display } = normalizePhone(phoneInput);
 
@@ -107,7 +120,7 @@ export async function verifyOtp(
     goBizError(tokenReq, tokenRes, `Verifikasi OTP gagal (HTTP ${tokenReq.status})`);
   }
 
-  let merchantId: string | null = null;
+  let gopayMerchantId: string | null = null;
   let outletName: string | null = null;
   try {
     const cfgRes = await fetch(GOBIZ_CONFIG_URL, {
@@ -123,7 +136,7 @@ export async function verifyOtp(
         ? (rawData as Record<string, unknown>)
         : cfg,
     );
-    merchantId = extracted.merchantId;
+    gopayMerchantId = extracted.merchantId;
     outletName = extracted.outletName;
   } catch {
   }
@@ -132,9 +145,22 @@ export async function verifyOtp(
     access_token: tokenData.access_token,
     refresh_token: tokenData.refresh_token ?? "",
     phone_number: display,
-    merchant_id: merchantId,
+    merchant_id: gopayMerchantId,
     outlet_name: outletName ?? "Merchant GoPay",
   });
-  if (DB) await saveSession(DB, session);
+  if (DB) {
+    if (!merchantId) {
+      const err: any = new Error("merchantId wajib untuk menyimpan sesi GoBiz");
+      err.status = 400;
+      throw err;
+    }
+    await saveSession(DB, merchantId, session);
+    if (gopayMerchantId || outletName) {
+      await updateMerchant(DB, merchantId, {
+        gopayMerchantId: gopayMerchantId,
+        name: outletName ?? undefined,
+      });
+    }
+  }
   return session;
 }

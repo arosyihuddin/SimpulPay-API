@@ -1,18 +1,20 @@
-import { getSetting, setSetting } from '../db/queries';
+import { getMerchant, updateMerchant } from '../db/queries';
 import type { Db } from '../db/client';
 const QRIS_EXPIRY_MS = 5 * 60 * 1000;
 
-export async function getQrisStatic(DB: Db): Promise<string> {
-  return (await getSetting(DB, 'qris_static')) || '';
+export { getMerchant };
+
+export async function getQrisStatic(DB: Db, merchantId: string): Promise<string> {
+  return (await getMerchant(DB, merchantId))?.qris_static || '';
 }
-export async function setQrisStatic(DB: Db, code: string): Promise<void> {
-  await setSetting(DB, 'qris_static', code);
+export async function setQrisStatic(DB: Db, merchantId: string, code: string): Promise<void> {
+  await updateMerchant(DB, merchantId, { qrisStatic: code });
 }
-export async function getMerchantId(DB: Db): Promise<string> {
-  return (await getSetting(DB, 'gopay_merchant_id')) || '';
+export async function getMerchantId(DB: Db, merchantId: string): Promise<string> {
+  return (await getMerchant(DB, merchantId))?.gopay_merchant_id || '';
 }
-export async function setMerchantId(DB: Db, id: string): Promise<void> {
-  await setSetting(DB, 'gopay_merchant_id', id);
+export async function setMerchantId(DB: Db, merchantId: string, id: string): Promise<void> {
+  await updateMerchant(DB, merchantId, { gopayMerchantId: id });
 }
 
 export function parseQrisTlv(payload: string): Record<string, string> {

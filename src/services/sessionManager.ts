@@ -66,7 +66,7 @@ export function buildSession(input: {
   };
 }
 
-export async function saveSession(DB: Db, session: Session): Promise<void> {
+export async function saveSession(DB: Db, merchantId: string, session: Session): Promise<void> {
   const data = {
     phone_number: session.phone_number ?? null,
     merchant_id: session.merchant_id ?? null,
@@ -77,13 +77,13 @@ export async function saveSession(DB: Db, session: Session): Promise<void> {
     updated_at: session.updated_at ?? null,
     expires_at: session.expires_at ?? null,
   };
-  await saveGoBizSession(DB, data as Record<string, unknown>);
+  await saveGoBizSession(DB, merchantId, data as Record<string, unknown>);
   console.log('[SessionManager] Sesi berhasil diperbarui dan disimpan ke database.');
 }
 
-export async function loadSession(DB: Db): Promise<Session | null> {
+export async function loadSession(DB: Db, merchantId: string): Promise<Session | null> {
   try {
-    const data = await loadGoBizSession(DB);
+    const data = await loadGoBizSession(DB, merchantId);
     return data as Session | null;
   } catch {
     return null;
@@ -96,8 +96,8 @@ export function isExpired(session: Session | null | undefined): boolean {
   return new Date(session.expires_at).getTime() < Date.now();
 }
 
-export async function refreshSession(DB: Db): Promise<Session | null> {
-  const session = await loadSession(DB);
+export async function refreshSession(DB: Db, merchantId: string): Promise<Session | null> {
+  const session = await loadSession(DB, merchantId);
   if (!session || !session.refresh_token) {
     console.log('[SessionManager] Refresh token tidak ditemukan. Diperlukan login ulang (Settings → Login GoBiz).');
     return null;
@@ -127,18 +127,19 @@ export async function refreshSession(DB: Db): Promise<Session | null> {
       refresh_token: data.refresh_token ?? (session.refresh_token as string),
       extra: { ...session },
     });
-    await saveSession(DB, updated);
+    await saveSession(DB, merchantId, updated);
     console.log('[SessionManager] Auto-refresh token BERHASIL! Token baru telah ditulis ke database.');
     return updated;
   } catch (err) {
-    console.log(`[SessionManager] Auto-refresh token GAGAL: ${(err as Error).message}`);
+    const msg = (err as Error).message;
+    console.log(`[SessionManager] Auto-refresh token GAGAL: ${msg}`);
     return null;
   }
 }
 
 let lastMissingWarn = 0;
-export async function getValidHeaders(DB: Db, userAgent?: string): Promise<Record<string, string> | null> {
-  let session = await loadSession(DB);
+export async function getValidHeaders(DB: Db, merchantId: string, userAgent?: string): Promise<Record<string, string> | null> {
+  let session = await loadSession(DB, merchantId);
   if (!session || !session.access_token) {
     const now = Date.now();
     if (now - lastMissingWarn > 60_000) {
@@ -150,7 +151,7 @@ export async function getValidHeaders(DB: Db, userAgent?: string): Promise<Recor
 
   if (isExpired(session)) {
     console.log('[SessionManager] Token terdeteksi kadaluwarsa, mencoba refresh otomatis...');
-    const refreshed = await refreshSession(DB);
+    const refreshed = await refreshSession(DB, merchantId);
     if (refreshed) session = refreshed;
   }
 

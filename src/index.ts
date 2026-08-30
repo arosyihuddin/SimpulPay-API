@@ -4,7 +4,7 @@ import { cors } from "hono/cors";
 import { publicRoutes } from "./routes/public";
 import { adminRoutes } from "./routes/admin";
 import { v1Routes } from "./routes/v1";
-import { cleanOldClaims, cleanExpiredSessions, markQRISExpired, insertLog } from "./db/queries";
+import { cleanOldClaims, cleanExpiredSessions, markQRISExpired, insertLog, listAllMerchants, insertNotification, listActiveSubscriptions, createInvoice, getPlan } from "./db/queries";
 import { loadSession, isExpired, refreshSession } from "./services/sessionManager";
 import { createDb, closeDb } from "./db/client";
 import type { AppEnv, Env } from "./types";
@@ -87,19 +87,55 @@ export default {
       try {
         await cleanOldClaims(DB);
         await cleanExpiredSessions(DB);
-        await markQRISExpired(DB);
+        // expired per merchant
+        const merchants = await listAllMerchants(DB);
+        for (const m of merchants) await markQRISExpired(DB, Date.now(), m.id);
       } catch (err) {
         console.error("[cron] Gagal cleanup:", (err as Error).message);
       }
-    } else if (event.cron === "0 */6 * * *") {
-      try {
-        const session = await loadSession(DB);
-        if (session && session.refresh_token && isExpired(session)) {
-          await insertLog(DB, "INFO", "Auto Refresh: Token mendekati kedaluwarsa, memperbarui sesi...");
-          await refreshSession(DB);
+    } else if (event.cron === "0 0 1 * *") {
+      // generate invoice per siklus — aktif sub yg ends_at lewat
+      const subs = await listActiveSubscriptions(DB);
+      for (const s of subs) {
+        try {
+          const now = Date.now();
+          if (s.ends_at && s.ends_at <= now) {
+            const plan = await getPlan(DB, s.plan_id);
+            await createInvoice(DB, {
+              id: "inv_" + crypto.randomUUID().slice(0, 8),
+              userId: s.user_id,
+              subscriptionId: s.id,
+              amount: plan?.price ?? 0,
+              periodStart: s.ends_at,
+              periodEnd: s.ends_at + 30 * 24 * 60 * 60 * 1000,
+            });
+          }
+        } catch (err) {
+          await insertLog(DB, "ERROR", `Gagal generate invoice subscription ${s.id}: ${(err as Error).message}`);
         }
-      } catch (err) {
-        await insertLog(DB, "ERROR", `Gagal auto refresh session: ${(err as Error).message}`);
+      }
+    } else if (event.cron === "0 */6 * * *") {
+      // auto-refresh sesi per merchant
+      const merchants = await listAllMerchants(DB);
+      for (const m of merchants) {
+        try {
+          const session = await loadSession(DB, m.id);
+          if (session && session.refresh_token && isExpired(session)) {
+            await insertLog(DB, "INFO", `Auto Refresh: Token merchant ${m.id} mendekati kedaluwarsa, memperbarui sesi...`);
+            const refreshed = await refreshSession(DB, m.id);
+            if (!refreshed) {
+              await insertNotification(DB, {
+                userId: m.user_id,
+                merchantId: m.id,
+                type: "token_warning",
+                title: "Sesi GoBiz Perlu Login Ulang",
+                message: `Auto-refresh token gagal untuk merchant ${m.name}. Login OTP ulang di dashboard.`,
+              });
+            }
+          }
+        } catch (err) {
+          await insertLog(DB, "ERROR", `Gagal auto refresh session merchant ${m.id}: ${(err as Error).message}`);
+        }
       }
     }
     await DBClient.end().catch(() => {});

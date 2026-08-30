@@ -30,7 +30,13 @@ export async function getUserByUsername(db: Db, username: string): Promise<UserR
 
 export async function createUser(
   db: Db,
-  u: { id: string; username: string; passwordHash: string; role?: string },
+  u: {
+    id: string;
+    username: string;
+    passwordHash: string;
+    role?: "admin" | "customer";
+    status?: "active" | "suspended" | "banned";
+  },
 ) {
   const now = Date.now();
   await db.insert(users).values({
@@ -38,6 +44,7 @@ export async function createUser(
     username: u.username,
     password_hash: u.passwordHash,
     role: u.role ?? "admin",
+    status: u.status ?? "active",
     created_at: now,
     updated_at: now,
   });
@@ -46,13 +53,14 @@ export async function createUser(
 export async function updateUser(
   db: Db,
   id: string,
-  u: { username?: string; role?: string; passwordHash?: string },
+  u: { username?: string; role?: "admin" | "customer"; passwordHash?: string; status?: "active" | "suspended" | "banned" },
 ) {
   const now = Date.now();
   const sets: Record<string, unknown> = { updated_at: now };
   if (u.username !== undefined) sets.username = u.username;
   if (u.role !== undefined) sets.role = u.role;
   if (u.passwordHash !== undefined) sets.password_hash = u.passwordHash;
+  if (u.status !== undefined) sets.status = u.status;
   if (Object.keys(sets).length === 1) return; // hanya updated_at — tak ada yang diubah
   await db.update(users).set(sets).where(eq(users.id, id));
 }

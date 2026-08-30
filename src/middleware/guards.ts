@@ -2,9 +2,12 @@ import type { Context, MiddlewareHandler } from "hono";
 import {
   cleanExpiredSessions,
   getAdminSession,
-  getSetting,
+  getApiKeyByKey,
+  getMerchant,
+  updateApiKey,
 } from "../db/queries";
 import { getDb, type Db } from "../db/client";
+import { getUserById } from "../db/repositories/user.repository";
 import { fail } from "./errorHandler";
 import type { AppEnv } from "../types";
 
@@ -24,34 +27,59 @@ export function extractApiKey(c: Context<AppEnv>): string | null {
   );
 }
 
-export async function getApiKey(DB: Db): Promise<string> {
-  return (await getSetting(DB, "api_key")) || "";
-}
-export async function apiKeyOk(DB: Db, key: string | null): Promise<boolean> {
-  const expected = await getApiKey(DB);
-  return !!expected && key === expected;
+/** Return userId jika key valid (active + owner user active), else null. */
+export async function apiKeyOk(DB: Db, key: string | null): Promise<string | null> {
+  if (!key) return null;
+  const row = await getApiKeyByKey(DB, key);
+  if (!row || row.status !== "active") return null;
+  const owner = await getUserById(DB, row.user_id);
+  if (!owner || owner.status !== "active") return null;
+  await updateApiKey(DB, row.id, { lastUsedAt: Date.now() });
+  return row.user_id;
 }
 
+/** Return userId jika sesi admin valid, else null. */
 export async function adminOk(
   DB: Db,
   token: string | null | undefined,
-): Promise<boolean> {
-  if (!token) return false;
+): Promise<string | null> {
+  if (!token) return null;
   await cleanExpiredSessions(DB);
   const s = await getAdminSession(DB, token);
-  return !!s && s.expires_at > Date.now();
+  if (!s || s.expires_at <= Date.now()) return null;
+  return s.user_id;
 }
 
 export const apiKeyGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   const key = extractApiKey(c);
-  if (!(await apiKeyOk(getDb(c), key)))
-    fail(401, "Autentikasi Gagal: API Key tidak valid");
+  const userId = await apiKeyOk(getDb(c), key);
+  if (!userId) fail(401, "Autentikasi Gagal: API Key tidak valid");
+  c.set("userId", userId);
   await next();
 };
 
 export const adminGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   const token = c.get("adminToken");
-  if (!(await adminOk(getDb(c), token)))
-    fail(401, "Tidak terautentikasi atau sesi berakhir");
+  const userId = await adminOk(getDb(c), token);
+  if (!userId) fail(401, "Tidak terautentikasi atau sesi berakhir");
+  c.set("userId", userId);
+  await next();
+};
+
+/**
+ * Resolve merchant dari query `merchant_id` atau header `x-merchant-id`,
+ * pastikan milik user login (userId) dan status active. Set c.get("merchantId").
+ */
+export const merchantGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const merchantId =
+    c.req.query("merchant_id") || c.req.header("x-merchant-id") || null;
+  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
+  const merchant = await getMerchant(getDb(c), merchantId);
+  if (!merchant) fail(404, "Merchant tidak ditemukan");
+  if (merchant.user_id !== c.get("userId"))
+    fail(403, "Akses ditolak: merchant bukan milik akun ini");
+  if (merchant.status !== "active")
+    fail(403, "Merchant tidak aktif");
+  c.set("merchantId", merchantId);
   await next();
 };

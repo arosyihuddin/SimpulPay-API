@@ -1,0 +1,211 @@
+import { ADMIN_TTL_MS } from "../../middleware/guards";
+import { hashPassword, verifyPassword } from "../../utils/auth.helper";
+import {
+  insertLog,
+  createAdminSession,
+  deleteAdminSession,
+  getAdminSession,
+  createMerchant,
+} from "../../db/queries";
+import {
+  listUsers,
+  getUserById,
+  getUserByUsername,
+  createUser,
+  updateUser,
+  updateUserPassword,
+  deleteUser,
+  countUsers,
+} from "../../db/repositories/user.repository";
+import type { Context } from "hono";
+import type { AppEnv } from "../../types";
+import { getDb } from "../../db/client";
+import { cookieToken } from "../../utils/auth.helper";
+import { bad, cookieHeader, SESSION_MAX_AGE } from "./helpers";
+
+export async function setupStatus(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const needsSetup = (await countUsers(DB)) === 0;
+  return c.json({ needsSetup, configDone: true });
+}
+
+export async function setup(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
+  if ((await countUsers(DB)) > 0)
+    bad("Setup sudah selesai. Logout lalu login.", 409);
+  const username = (body?.username || "").trim();
+  const password = body?.password || "";
+  if (username.length < 3) bad("Username minimal 3 karakter");
+  if (password.length < 8) bad("Password minimal 8 karakter");
+  const id = crypto.randomUUID();
+  await createUser(DB, {
+    id,
+    username,
+    passwordHash: await hashPassword(password),
+    role: "admin",
+  });
+  await createMerchant(DB, {
+    id: "m_" + id.slice(0, 8),
+    userId: id,
+    name: "Merchant " + username,
+  });
+  const token = crypto.randomUUID();
+  await createAdminSession(DB, token, ADMIN_TTL_MS, id);
+  await insertLog(DB, "INFO", "Setup selesai: admin '" + username + "' dibuat. Login sukses.");
+  c.header("Set-Cookie", cookieHeader(token, SESSION_MAX_AGE));
+  return c.json({ success: true });
+}
+
+export async function login(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
+  const username = (body?.username || "").trim();
+  const password = body?.password || "";
+  if (!username || !password) bad("Username dan password wajib diisi", 401);
+  const user = await getUserByUsername(DB, username);
+  if (!user || !(await verifyPassword(password, user.password_hash))) {
+    await insertLog(DB, "WARNING", "Percobaan login admin gagal");
+    bad("Username atau password salah", 401);
+  }
+  if (user.status !== "active")
+    bad("Akun tidak aktif (suspended/banned). Hubungi admin.", 403);
+  const token = crypto.randomUUID();
+  await createAdminSession(DB, token, ADMIN_TTL_MS, user.id);
+  await insertLog(DB, "INFO", "Admin login sukses: " + username);
+  c.header("Set-Cookie", cookieHeader(token, SESSION_MAX_AGE));
+  return c.json({ success: true });
+}
+
+export async function logout(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const token = cookieToken(c);
+  if (token) {
+    await deleteAdminSession(DB, token);
+    await insertLog(DB, "INFO", "Admin logout");
+  }
+  c.header("Set-Cookie", cookieHeader("", 0));
+  return c.json({ success: true });
+}
+
+export async function me(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const token = c.get("adminToken") as string;
+  const s = await getAdminSession(DB, token);
+  const userCount = await countUsers(DB);
+  let role = "admin";
+  let username = null;
+  let status = "active";
+  if (s?.user_id) {
+    const u = await getUserById(DB, s.user_id);
+    if (u) {
+      role = u.role;
+      username = u.username;
+      status = u.status;
+    }
+  }
+  return c.json({
+    success: true,
+    data: {
+      session_expires_at: s?.expires_at ?? null,
+      setup_done: userCount > 0,
+      role,
+      username,
+      status,
+    },
+  });
+}
+
+export async function changePassword(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
+  const username = (body?.username || "").trim();
+  const oldPassword = body?.old_password || "";
+  const newPassword = body?.new_password || "";
+  if (!username || !oldPassword || !newPassword)
+    bad("Username, password lama, dan password baru wajib diisi");
+  const user = await getUserByUsername(DB, username);
+  if (!user || !(await verifyPassword(oldPassword, user.password_hash)))
+    bad("Password lama salah", 401);
+  if (newPassword.length < 8) bad("Password baru minimal 8 karakter");
+  await updateUserPassword(DB, user.id, await hashPassword(newPassword));
+  await insertLog(DB, "INFO", "Password admin '" + username + "' diubah");
+  return c.json({ success: true });
+}
+
+export async function listUsersCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const q = c.req.query();
+  const limit = parseInt((q.limit as string) || "50", 10);
+  const offset = parseInt((q.offset as string) || "0", 10);
+  const users = (await listUsers(DB, limit, offset)).map((u) => ({
+    id: u.id,
+    username: u.username,
+    role: u.role,
+    status: u.status,
+    created_at: u.created_at,
+    updated_at: u.updated_at,
+  }));
+  return c.json({ success: true, data: { users, total: await countUsers(DB) } });
+}
+
+export async function createUserCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const body = await c.req.json();
+  const username = (body?.username || "").trim();
+  const password = body?.password || "";
+  const role = (body?.role || "customer").trim();
+  if (username.length < 3) bad("Username minimal 3 karakter");
+  if (password.length < 8) bad("Password minimal 8 karakter");
+  if (await getUserByUsername(DB, username)) bad("Username sudah dipakai", 409);
+  if (!["admin", "customer"].includes(role)) bad("Role harus 'admin' atau 'customer'");
+  const id = crypto.randomUUID();
+  await createUser(DB, { id, username, passwordHash: await hashPassword(password), role: role as "admin" | "customer" });
+  await insertLog(DB, "INFO", "User dibuat: " + username + " (" + role + ")");
+  return c.json({ success: true, data: { id } });
+}
+
+export async function updateUserCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const id = c.req.param("id") ?? "";
+  const existing = await getUserById(DB, id);
+  if (!existing) bad("User tidak ditemukan", 404);
+  const body = await c.req.json();
+  const patch: { username?: string; role?: "admin" | "customer"; passwordHash?: string; status?: "active" | "suspended" | "banned" } = {};
+  if (body?.username !== undefined) {
+    const username = String(body.username).trim();
+    if (username.length < 3) bad("Username minimal 3 karakter");
+    const dup = await getUserByUsername(DB, username);
+    if (dup && dup.id !== id) bad("Username sudah dipakai", 409);
+    patch.username = username;
+  }
+  if (body?.role !== undefined) {
+    const role = String(body.role).trim();
+    if (!["admin", "customer"].includes(role)) bad("Role harus 'admin' atau 'customer'");
+    patch.role = role as "admin" | "customer";
+  }
+  if (body?.status !== undefined) {
+    const status = String(body.status).trim();
+    if (!["active", "suspended", "banned"].includes(status)) bad("Status harus active/suspended/banned");
+    patch.status = status as "active" | "suspended" | "banned";
+  }
+  if (body?.password) {
+    if (String(body.password).length < 8) bad("Password minimal 8 karakter");
+    patch.passwordHash = await hashPassword(String(body.password));
+  }
+  await updateUser(DB, id, patch);
+  await insertLog(DB, "INFO", "User diubah: " + existing.username);
+  return c.json({ success: true });
+}
+
+export async function deleteUserCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const id = c.req.param("id") ?? "";
+  const existing = await getUserById(DB, id);
+  if (!existing) bad("User tidak ditemukan", 404);
+  const s = await getAdminSession(DB, c.get("adminToken") as string);
+  if (s?.user_id === id) bad("Tidak bisa menghapus akun yang sedang dipakai", 409);
+  await deleteUser(DB, id);
+  await insertLog(DB, "INFO", "User dihapus: " + existing.username);
+  return c.json({ success: true });
+}

@@ -1,5 +1,5 @@
 import { getValidHeaders, refreshSession } from "./sessionManager";
-import { claimTx, getClaim, insertLog } from "../db/queries";
+import { claimTx, getClaim, getMerchant, insertLog, insertNotification } from "../db/queries";
 import { getMerchantId } from "./qris";
 import type { Db } from "../db/client";
 
@@ -65,6 +65,7 @@ const TX_PAYMENT_TYPES =
 
 export async function fetchTransactionsWithRetry(
   DB: Db,
+  merchantId: string,
   opts: {
     userAgent?: string;
     startTime?: number | null;
@@ -74,13 +75,13 @@ export async function fetchTransactionsWithRetry(
     size?: string;
   } = {},
 ): Promise<any[]> {
-  const headers = await getValidHeaders(DB, opts.userAgent);
+  const headers = await getValidHeaders(DB, merchantId, opts.userAgent);
   if (!headers) {
     throw new Error(
       "Sesi GoPay belum ada. Login OTP lewat dashboard (Settings → Login GoBiz).",
     );
   }
-  const merchantId = opts.merchantIdOverride || (await getMerchantId(DB));
+  const gopayMerchantId = opts.merchantIdOverride || (await getMerchantId(DB, merchantId));
   const now = Date.now();
   const startTimeISO = opts.startTime
     ? new Date(opts.startTime).toISOString()
@@ -103,7 +104,7 @@ export async function fetchTransactionsWithRetry(
       payment_types: TX_PAYMENT_TYPES,
       start_time: startTimeISO,
       end_time: endTimeISO,
-      merchant_ids: merchantId,
+      merchant_ids: gopayMerchantId,
     });
 
   const pageWithRetry = async (
@@ -122,9 +123,9 @@ export async function fetchTransactionsWithRetry(
           "WARNING",
           "Sesi expired (401). Memulai auto-refresh...",
         );
-        const refreshed = await refreshSession(DB);
+        const refreshed = await refreshSession(DB, merchantId);
         if (refreshed) {
-          const newHeaders = await getValidHeaders(DB, opts.userAgent);
+          const newHeaders = await getValidHeaders(DB, merchantId, opts.userAgent);
           return await fetchPage(newHeaders!, from);
         }
       }
@@ -149,13 +150,14 @@ export async function fetchTransactionsWithRetry(
 
 export async function verifyPayment(
   DB: Db,
+  merchantId: string,
   amount: unknown,
   startTime: unknown,
   merchantIdOverride: string | null = null,
   userAgent: string | null = null,
   qrisId: string | null = null,
 ) {
-  const rawTransactions = await fetchTransactionsWithRetry(DB, {
+  const rawTransactions = await fetchTransactionsWithRetry(DB, merchantId, {
     startTime: startTime ? (startTime as number) : undefined,
     merchantIdOverride,
     userAgent: userAgent || undefined,
@@ -179,12 +181,23 @@ export async function verifyPayment(
       const existingClaim = await getClaim(DB, txId);
 
       if (!existingClaim) {
-        if (await claimTx(DB, txId, qrisId)) {
+        if (await claimTx(DB, txId, qrisId, merchantId)) {
           await insertLog(
             DB,
             "INFO",
             `TRX ${txId} diklaim oleh QRIS ${qrisId || "manual-check"}`,
           );
+          const merchant = await getMerchant(DB, merchantId);
+          if (merchant) {
+            await insertNotification(DB, {
+              userId: merchant.user_id,
+              merchantId,
+              type: "payment_success",
+              title: "Pembayaran Berhasil",
+              message: `Pembayaran Rp${txAmount.toLocaleString("id-ID")} diterima (TRX ${txId})`,
+              dataJson: JSON.stringify({ txId, qrisId, amount: txAmount }),
+            });
+          }
           return {
             transaction_id: txId,
             order_id: tx.order_id,

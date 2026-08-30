@@ -88,6 +88,79 @@ export const logsRes = okRes.extend({
   logs: z.array(z.record(z.string(), z.unknown())),
 });
 
+export const merchantStatusRes = okRes.extend({
+  data: z.object({
+    merchant_id: z.string().nullable(),
+    qris_static_set: z.boolean(),
+    gobiz_session_exists: z.boolean(),
+    token_status: z.enum(["valid", "invalid"]),
+    message: z.string(),
+  }),
+});
+
+export const merchantSchema = z.object({
+  id: z.string(),
+  type: z.enum(["gopay", "shopeepay"]),
+  name: z.string(),
+  status: z.enum(["active", "inactive"]),
+  gopay_merchant_id: z.string().nullable(),
+  qris_static_set: z.boolean(),
+  created_at: z.number(),
+  updated_at: z.number(),
+});
+export const listMerchantsRes = okRes.extend({
+  data: z.object({ merchants: z.array(merchantSchema) }),
+});
+export const createMerchantReq = z.object({
+  name: z.string().min(2),
+  type: z.enum(["gopay", "shopeepay"]).optional(),
+  gopay_merchant_id: z.string().optional(),
+  qris_static: z.string().optional(),
+});
+export const updateMerchantReq = z.object({
+  name: z.string().min(2).optional(),
+  type: z.enum(["gopay", "shopeepay"]).optional(),
+  gopay_merchant_id: z.string().nullable().optional(),
+  qris_static: z.string().nullable().optional(),
+  status: z.enum(["active", "inactive"]).optional(),
+});
+export const apiKeySchema = z.object({
+  id: z.string(),
+  label: z.string().nullable(),
+  key_masked: z.string(),
+  status: z.enum(["active", "revoked"]),
+  last_used_at: z.number().nullable(),
+  created_at: z.number(),
+});
+export const listApiKeysRes = okRes.extend({
+  data: z.object({ api_keys: z.array(apiKeySchema) }),
+});
+export const createApiKeyReq = z.object({ label: z.string().optional() });
+export const createApiKeyRes = okRes.extend({
+  data: z.object({
+    id: z.string(),
+    api_key: z.string(),
+    api_key_masked: z.string(),
+  }),
+});
+export const notificationSchema = z.object({
+  id: z.number(),
+  user_id: z.string(),
+  merchant_id: z.string().nullable(),
+  type: z.string(),
+  title: z.string(),
+  message: z.string(),
+  data_json: z.string().nullable(),
+  read: z.boolean(),
+  created_at: z.number(),
+});
+export const listNotificationsRes = okRes.extend({
+  data: z.object({
+    notifications: z.array(notificationSchema),
+    unread: z.number(),
+  }),
+});
+
 // --- Admin (matching responses) ---
 export const setupStatusRes = z.object({
   needsSetup: z.boolean(),
@@ -122,12 +195,13 @@ export const listQrisRes = okRes.extend({
 export const createUserReq = z.object({
   username: z.string().min(3),
   password: z.string().min(8),
-  role: z.enum(["admin", "user"]).optional(),
+  role: z.enum(["admin", "customer"]).optional(),
 });
 export const updateUserReq = z.object({
   username: z.string().min(3).optional(),
   password: z.string().min(8).optional(),
-  role: z.enum(["admin", "user"]).optional(),
+  role: z.enum(["admin", "customer"]).optional(),
+  status: z.enum(["active", "suspended", "banned"]).optional(),
 });
 export const apiKeyRes = okRes.extend({
   data: z.object({
@@ -192,12 +266,28 @@ export const listUsersRes = okRes.extend({
 
 export const settingsRes = okRes.extend({
   data: z.object({
-    api_key_set: z.boolean(),
-    api_key_masked: z.string(),
-    api_key: z.string(),
-    qris_static_set: z.boolean(),
-    qris_static_masked: z.string(),
-    gopay_merchant_id: z.string(),
-    gobiz_session_exists: z.boolean(),
+    merchants: z.array(
+      z.object({
+        id: z.string(),
+        type: z.enum(["gopay", "shopeepay"]),
+        name: z.string(),
+        status: z.enum(["active", "inactive"]),
+        gopay_merchant_id: z.string().nullable(),
+        qris_static_set: z.boolean(),
+        qris_static_masked: z.string(),
+        created_at: z.number(),
+        updated_at: z.number(),
+      }),
+    ),
+    api_keys: z.array(
+      z.object({
+        id: z.string(),
+        label: z.string().nullable(),
+        key_masked: z.string(),
+        status: z.enum(["active", "revoked"]),
+        last_used_at: z.number().nullable(),
+        created_at: z.number(),
+      }),
+    ),
   }),
 });

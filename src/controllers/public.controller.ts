@@ -123,6 +123,7 @@ export async function qrStatus(c: Context<AppEnv>) {
   try {
     const matched = await verifyPayment(
       DB,
+      qris.merchant_id || "",
       qris.amount,
       qris.created_at,
       null,

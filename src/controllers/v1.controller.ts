@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import type { AppEnv } from "../types";
 import { getDb } from "../db/client";
-import { getValidHeaders } from "../services/sessionManager";
+import { getValidHeaders, loadSession, isExpired } from "../services/sessionManager";
 import {
   generateDynamicQRIS,
   qrisExpiryMs,
@@ -21,6 +21,7 @@ import {
   markQRISExpired,
   insertLog,
   recentLogs,
+  getMerchant,
 } from "../db/queries";
 import { fail, ok } from "../middleware/errorHandler";
 
@@ -30,14 +31,48 @@ export async function health(c: Context<AppEnv>) {
   );
 }
 
+export async function merchantStatus(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const merchantId = c.get("merchantId");
+  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
+  const merchant = await getMerchant(DB, merchantId);
+  if (!merchant) fail(404, "Merchant tidak ditemukan");
+  const session = await loadSession(DB, merchantId);
+  let tokenStatus: "valid" | "invalid";
+  let message: string;
+  if (!session || !session.access_token) {
+    tokenStatus = "invalid";
+    message = "Sesi belum dikonfigurasi. Login OTP di dashboard.";
+  } else if (isExpired(session)) {
+    tokenStatus = "invalid";
+    message = "Sesi sudah kedaluwarsa. Login OTP ulang di dashboard.";
+  } else {
+    tokenStatus = "valid";
+    message = "Token dan sesi GoPay merchant aktif";
+  }
+  return c.json(
+    ok({
+      data: {
+        merchant_id: merchantId,
+        qris_static_set: !!merchant.qris_static,
+        gobiz_session_exists: !!session,
+        token_status: tokenStatus,
+        message,
+      },
+    }),
+  );
+}
+
 export async function createQris(c: Context<AppEnv>) {
   const DB = getDb(c);
+  const merchantId = c.get("merchantId");
+  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
   const body = await c.req.json();
   const amount = body?.amount;
   if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
     fail(400, "Nominal pembayaran tidak valid");
   }
-  const st = await getQrisStatic(DB);
+  const st = await getQrisStatic(DB, merchantId);
   if (!st) fail(500, "QRIS static belum dikonfigurasi. Upload QRIS static di Settings → Konfigurasi QRIS.");
   const base = parseInt(String(amount), 10);
   const { code, pay } = uniqueAmount(base);
@@ -53,10 +88,11 @@ export async function createQris(c: Context<AppEnv>) {
     baseAmount: base,
     uniqueCode: code,
     trxId,
+    merchantId,
     createdAt: now,
     expiresAt,
   });
-  await insertLog(DB, "INFO", `QRIS dinamis dibuat via API v1 | TRX-ID: ${trxId} | Rp ${base} (+${code})`);
+  await insertLog(DB, "INFO", `QRIS dinamis dibuat via API v1 | Merchant ${merchantId} | TRX-ID: ${trxId} | Rp ${base} (+${code})`);
   return c.json(
     ok({
       data: {
@@ -79,7 +115,7 @@ export async function getQris(c: Context<AppEnv>) {
   const qris = await getQRIS(DB, id);
   if (!qris) fail(404, "QRIS tidak ditemukan");
   const expired = Date.now() > qris.expires_at;
-  if (expired) await markQRISExpired(DB);
+  if (expired) await markQRISExpired(DB, Date.now(), qris.merchant_id ?? undefined);
   return c.json(
     ok({
       data: {
@@ -99,6 +135,8 @@ export async function getQris(c: Context<AppEnv>) {
 
 export async function checkPayment(c: Context<AppEnv>) {
   const DB = getDb(c);
+  const merchantId = c.get("merchantId");
+  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
   const body = await c.req.json();
   const query = c.req.query();
   const amount = body?.amount || query.amount;
@@ -106,17 +144,17 @@ export async function checkPayment(c: Context<AppEnv>) {
   const scopeId = body?.trx_id || query.trx_id || null;
   if (!amount || isNaN(Number(amount))) fail(400, "Nominal pembayaran tidak valid");
   try {
-    const merchantId = c.req.header("x-gopay-merchant-id") || null;
     const matchedTransaction = await verifyPayment(
       DB,
+      merchantId,
       amount,
       startTime,
-      merchantId,
+      null,
       c.req.header("user-agent"),
       scopeId,
     );
     if (matchedTransaction) {
-      await insertLog(DB, "SUCCESS", `Pembayaran terverifikasi lunas via API v1 | Rp ${parseInt(String(amount), 10)}`, matchedTransaction);
+      await insertLog(DB, "SUCCESS", `Pembayaran terverifikasi lunas via API v1 | Merchant ${merchantId} | Rp ${parseInt(String(amount), 10)}`, matchedTransaction);
       return c.json(ok({ paid: true, transaction: matchedTransaction }));
     }
     return c.json(
@@ -134,9 +172,11 @@ export async function checkPayment(c: Context<AppEnv>) {
 
 export async function listTransactions(c: Context<AppEnv>) {
   const DB = getDb(c);
+  const merchantId = c.get("merchantId");
+  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
   const query = c.req.query();
   try {
-    const raw = await fetchTransactionsWithRetry(DB, {
+    const raw = await fetchTransactionsWithRetry(DB, merchantId, {
       userAgent: c.req.header("user-agent"),
       startTime: query.startTime
         ? parseInt(query.startTime as string, 10) * 1000
@@ -144,7 +184,6 @@ export async function listTransactions(c: Context<AppEnv>) {
       endTime: query.endTime
         ? parseInt(query.endTime as string, 10) * 1000
         : Date.now(),
-      merchantIdOverride: c.req.header("x-gopay-merchant-id") || null,
       pageSize: parseInt((query.pageSize as string) || "20", 10),
     });
     const formatted = raw.map(formatTransaction);
@@ -163,17 +202,17 @@ export async function listTransactions(c: Context<AppEnv>) {
 
 export async function monthTransactions(c: Context<AppEnv>) {
   const DB = getDb(c);
+  const merchantId = c.get("merchantId");
+  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
   const now = new Date();
   const startOfMonthUnix = Math.floor(
     new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000,
   );
-  const merchantId = c.req.header("x-gopay-merchant-id") || (await getMerchantId(DB));
   try {
-    const raw = await fetchTransactionsWithRetry(DB, {
+    const raw = await fetchTransactionsWithRetry(DB, merchantId, {
       userAgent: c.req.header("user-agent"),
       startTime: startOfMonthUnix * 1000,
       endTime: now.getTime(),
-      merchantIdOverride: merchantId,
       pageSize: 100,
     });
     const formatted = raw.map(formatTransaction);
@@ -192,7 +231,9 @@ export async function monthTransactions(c: Context<AppEnv>) {
 
 export async function tokenStatus(c: Context<AppEnv>) {
   const DB = getDb(c);
-  const activeHeaders = await getValidHeaders(DB, c.req.header("user-agent"));
+  const merchantId = c.get("merchantId");
+  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
+  const activeHeaders = await getValidHeaders(DB, merchantId, c.req.header("user-agent"));
   if (!activeHeaders)
     return c.json(
       ok({
@@ -203,7 +244,7 @@ export async function tokenStatus(c: Context<AppEnv>) {
       }),
     );
   try {
-    const merchantId = await getMerchantId(DB);
+    const gopayMerchantId = await getMerchantId(DB, merchantId);
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 3600 * 1000).toISOString();
     await fetchGojekTransactions(activeHeaders, {
@@ -213,7 +254,7 @@ export async function tokenStatus(c: Context<AppEnv>) {
       payment_types: "QRIS,GOPAY",
       start_time: oneHourAgo,
       end_time: now.toISOString(),
-      merchant_ids: merchantId,
+      merchant_ids: gopayMerchantId,
     });
     return c.json(
       ok({
