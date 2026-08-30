@@ -1,0 +1,81 @@
+/**
+ * Seed data awal: plans + settings system-wide.
+ * Idempotent — aman di-run berulang. Update value plan yang udah ada.
+ * Usage: bun run seed
+ */
+import "dotenv/config";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import * as schema from "../src/db/schema";
+import {
+  createPlan,
+  getPlan,
+  updatePlan,
+} from "../src/db/repositories/billing.repository";
+import { setSetting } from "../src/db/repositories/settings.repository";
+
+const cs =
+  process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE ??
+  process.env.DATABASE_URL;
+if (!cs) {
+  console.error("DATABASE_URL / HYPERDRIVE local belum di-set di .env");
+  process.exit(1);
+}
+
+const client = postgres(cs, { max: 1, onnotice: () => {} });
+const db = drizzle(client, { schema });
+
+// ── Plans ───────────────────────────────────────────
+// dailyPaidLimit: null = unlimited (Business). Harga dalam rupiah.
+type SeedPlan = {
+  id: string;
+  name: string;
+  type: "free" | "paid";
+  price: number;
+  maxMerchants: number;
+  dailyPaidLimit: number | null;
+  featuresJson: string | null;
+};
+const plans: SeedPlan[] = [
+  { id: "p_free", name: "Free", type: "free", price: 0, maxMerchants: 1, dailyPaidLimit: 10, featuresJson: null },
+  { id: "p_starter", name: "Starter", type: "paid", price: 49000, maxMerchants: 3, dailyPaidLimit: 50, featuresJson: JSON.stringify({ priority_support: true }) },
+  { id: "p_business", name: "Business", type: "paid", price: 79000, maxMerchants: 10, dailyPaidLimit: null, featuresJson: JSON.stringify({ priority_support: true, analytics: true }) },
+];
+
+for (const p of plans) {
+  const existing = await getPlan(db, p.id);
+  if (existing) {
+    // Update value terbaru (harga/limit berubah dari seed sebelumnya)
+    await updatePlan(db, p.id, {
+      price: p.price,
+      maxMerchants: p.maxMerchants,
+      dailyPaidLimit: p.dailyPaidLimit,
+      featuresJson: p.featuresJson,
+      name: p.name,
+      type: p.type,
+      active: true,
+    });
+    console.log(`plan ${p.id} di-update`);
+    continue;
+  }
+  await createPlan(db, p);
+  console.log(`plan ${p.id} dibuat`);
+}
+
+// ── Settings system-wide ────────────────────────────
+const settings: Record<string, string> = {
+  maintenance: "false",
+  default_currency: "IDR",
+  qris_expiry_minutes: "15",
+  min_amount: "100",
+  max_amount: "10000000",
+  fee_percent: "0",
+};
+
+for (const [k, v] of Object.entries(settings)) {
+  await setSetting(db, k, v);
+  console.log(`setting ${k} = ${v}`);
+}
+
+await client.end();
+console.log("seed selesai ✓");

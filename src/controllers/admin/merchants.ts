@@ -1,4 +1,4 @@
-import { createMerchant, getMerchant, listMerchantsByUser, updateMerchant, deleteMerchant, deleteGoBizSession, insertLog } from "../../db/queries";
+import { createMerchant, getMerchant, listMerchantsByUser, countMerchantsByUser, updateMerchant, deleteMerchant, deleteGoBizSession, insertLog, getActiveSubscription, getPlan } from "../../db/queries";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
@@ -11,6 +11,16 @@ export async function createMerchantCtl(c: Context<AppEnv>) {
   const name = (body?.name || "").trim();
   if (name.length < 2) bad("Nama merchant minimal 2 karakter");
   const type = body?.type === "shopeepay" ? "shopeepay" : "gopay";
+
+  // Limit per plan: hitung merchant yang udah dipakai, blokir kalau mentok.
+  const sub = await getActiveSubscription(DB, userId);
+  const plan = sub ? await getPlan(DB, sub.plan_id) : null;
+  const limit = plan?.max_merchants ?? 1;
+  const count = await countMerchantsByUser(DB, userId);
+  if (count >= limit) {
+    bad(`Batas maksimal ${limit} merchant untuk plan ${plan?.name ?? "Free"}. Upgrade plan untuk menambah merchant.`, 403);
+  }
+
   const id = "m_" + crypto.randomUUID().slice(0, 8);
   await createMerchant(DB, { id, userId, name, type, gopayMerchantId: body?.gopay_merchant_id ? String(body.gopay_merchant_id) : null, qrisStatic: body?.qris_static ? String(body.qris_static) : null });
   await insertLog(DB, "INFO", "Merchant dibuat: " + name + " (" + type + ")");

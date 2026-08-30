@@ -16,6 +16,7 @@ export async function createPlan(
     type?: "free" | "paid";
     price?: number;
     maxMerchants?: number;
+    dailyPaidLimit?: number | null;
     featuresJson?: string | null;
     active?: boolean;
   },
@@ -27,6 +28,7 @@ export async function createPlan(
     type: p.type ?? "paid",
     price: p.price ?? 0,
     max_merchants: p.maxMerchants ?? 1,
+    daily_paid_limit: p.dailyPaidLimit ?? null,
     features_json: p.featuresJson ?? null,
     active: p.active ?? true,
     created_at: now,
@@ -57,6 +59,7 @@ export async function updatePlan(
     type?: "free" | "paid";
     price?: number;
     maxMerchants?: number;
+    dailyPaidLimit?: number | null;
     featuresJson?: string | null;
     active?: boolean;
   },
@@ -67,6 +70,7 @@ export async function updatePlan(
   if (p.type !== undefined) sets.type = p.type;
   if (p.price !== undefined) sets.price = p.price;
   if (p.maxMerchants !== undefined) sets.max_merchants = p.maxMerchants;
+  if (p.dailyPaidLimit !== undefined) sets.daily_paid_limit = p.dailyPaidLimit;
   if (p.featuresJson !== undefined) sets.features_json = p.featuresJson;
   if (p.active !== undefined) sets.active = p.active;
   if (Object.keys(sets).length === 1) return;

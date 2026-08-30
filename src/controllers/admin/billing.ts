@@ -35,6 +35,7 @@ export async function createPlanCtl(c: Context<AppEnv>) {
     type: body?.type === "free" ? "free" : "paid",
     price: parseInt(body?.price ?? "0", 10),
     maxMerchants: parseInt(body?.max_merchants ?? "1", 10),
+    dailyPaidLimit: body?.daily_paid_limit !== undefined ? parseInt(body.daily_paid_limit, 10) : null,
     featuresJson: body?.features_json ? JSON.stringify(body.features_json) : null,
     active: body?.active !== false,
   });
@@ -74,6 +75,7 @@ export async function updatePlanCtl(c: Context<AppEnv>) {
   }
   if (body?.price !== undefined) patch.price = parseInt(body.price, 10);
   if (body?.max_merchants !== undefined) patch.maxMerchants = parseInt(body.max_merchants, 10);
+  if (body?.daily_paid_limit !== undefined) patch.dailyPaidLimit = parseInt(body.daily_paid_limit, 10);
   if (body?.features_json !== undefined) patch.featuresJson = JSON.stringify(body.features_json);
   if (body?.active !== undefined) patch.active = body.active === true || body.active === "true";
   await updatePlan(DB, id, patch);

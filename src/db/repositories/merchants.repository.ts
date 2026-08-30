@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { merchants } from "../schema";
 import type { Db } from "../client";
 
@@ -26,6 +26,14 @@ export async function createMerchant(
 export async function getMerchant(db: Db, id: string): Promise<MerchantRow | null> {
   const rows = await db.select().from(merchants).where(eq(merchants.id, id));
   return rows[0] ?? null;
+}
+
+export async function countMerchantsByUser(db: Db, userId: string): Promise<number> {
+  const r = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(merchants)
+    .where(eq(merchants.user_id, userId));
+  return Number(r[0]?.c ?? 0);
 }
 
 export async function listMerchantsByUser(db: Db, userId: string): Promise<MerchantRow[]> {

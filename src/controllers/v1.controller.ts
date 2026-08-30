@@ -24,6 +24,7 @@ import {
   getMerchant,
 } from "../db/queries";
 import { fail, ok } from "../middleware/errorHandler";
+import { checkDailyPaidLimit } from "../services/limits";
 
 export async function health(c: Context<AppEnv>) {
   return c.json(
@@ -74,6 +75,8 @@ export async function createQris(c: Context<AppEnv>) {
   }
   const st = await getQrisStatic(DB, merchantId);
   if (!st) fail(500, "QRIS static belum dikonfigurasi. Upload QRIS static di Settings → Konfigurasi QRIS.");
+  const blocked = await checkDailyPaidLimit(DB, merchantId);
+  if (blocked) fail(429, `Batas transaksi harian tercapai (${blocked.used}/${blocked.limit}). Silakan upgrade plan atau coba besok.`);
   const base = parseInt(String(amount), 10);
   const { code, pay } = uniqueAmount(base);
   const dynamicCode = generateDynamicQRIS(st, pay);

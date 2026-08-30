@@ -1,5 +1,5 @@
-import { eq, lt } from "drizzle-orm";
-import { claims } from "../schema";
+import { eq, lt, and, gte, sql } from "drizzle-orm";
+import { claims, merchants } from "../schema";
 import type { Db } from "../client";
 
 export async function claimTx(
@@ -20,6 +20,18 @@ export async function claimTx(
 export async function getClaim(db: Db, txId: string): Promise<typeof claims.$inferSelect | null> {
   const rows = await db.select().from(claims).where(eq(claims.tx_id, txId));
   return rows[0] ?? null;
+}
+
+/** Jumlah transaksi PAID (claimed) hari ini untuk satu user, dihitung dari seluruh merchant miliknya. */
+export async function countPaidToday(db: Db, userId: string): Promise<number> {
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const rows = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(claims)
+    .innerJoin(merchants, eq(claims.merchant_id, merchants.id))
+    .where(and(eq(merchants.user_id, userId), gte(claims.claimed_at, dayStart.getTime())));
+  return Number(rows[0]?.c ?? 0);
 }
 
 export async function cleanOldClaims(db: Db, before = Date.now() - 24 * 60 * 60 * 1000) {

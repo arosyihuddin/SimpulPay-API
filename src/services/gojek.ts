@@ -1,6 +1,7 @@
 import { getValidHeaders, refreshSession } from "./sessionManager";
 import { claimTx, getClaim, getMerchant, insertLog, insertNotification } from "../db/queries";
 import { getMerchantId } from "./qris";
+import { checkDailyPaidLimit } from "./limits";
 import type { Db } from "../db/client";
 
 export const GOJEK_TRANSACTIONS_URL =
@@ -81,7 +82,8 @@ export async function fetchTransactionsWithRetry(
       "Sesi GoPay belum ada. Login OTP lewat dashboard (Settings → Login GoBiz).",
     );
   }
-  const gopayMerchantId = opts.merchantIdOverride || (await getMerchantId(DB, merchantId));
+  const gopayMerchantId =
+    opts.merchantIdOverride || (await getMerchantId(DB, merchantId));
   const now = Date.now();
   const startTimeISO = opts.startTime
     ? new Date(opts.startTime).toISOString()
@@ -125,7 +127,11 @@ export async function fetchTransactionsWithRetry(
         );
         const refreshed = await refreshSession(DB, merchantId);
         if (refreshed) {
-          const newHeaders = await getValidHeaders(DB, merchantId, opts.userAgent);
+          const newHeaders = await getValidHeaders(
+            DB,
+            merchantId,
+            opts.userAgent,
+          );
           return await fetchPage(newHeaders!, from);
         }
       }
@@ -181,6 +187,15 @@ export async function verifyPayment(
       const existingClaim = await getClaim(DB, txId);
 
       if (!existingClaim) {
+        const blocked = await checkDailyPaidLimit(DB, merchantId);
+        if (blocked) {
+          await insertLog(
+            DB,
+            "LIMIT",
+            `Daily paid limit (${blocked.limit}) tercapai, TRX ${txId} ditolak`,
+          );
+          continue;
+        }
         if (await claimTx(DB, txId, qrisId, merchantId)) {
           await insertLog(
             DB,

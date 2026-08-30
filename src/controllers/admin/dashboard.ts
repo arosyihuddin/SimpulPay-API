@@ -7,6 +7,7 @@ import { generateDynamicQRIS, qrisExpiryMs, uniqueAmount, getQrisStatic } from "
 import { formatTransaction, toRupiah } from "../../services/gojek";
 import { broadcast } from "../../services/realtime";
 import { bad, reqMerchant, fetchMonthTransactions } from "./helpers";
+import { checkDailyPaidLimit } from "../../services/limits";
 
 export async function dashboard(c: Context<AppEnv>) {
   const DB = getDb(c);
@@ -51,6 +52,8 @@ export async function createQris(c: Context<AppEnv>) {
   if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) bad("Nominal pembayaran tidak valid");
   const staticTemplate = await getQrisStatic(DB, merchantId);
   if (!staticTemplate) bad("QRIS static belum dikonfigurasi. Upload QRIS static di Settings → Konfigurasi QRIS.", 500);
+  const blocked = await checkDailyPaidLimit(DB, merchantId);
+  if (blocked) bad(`Batas transaksi harian tercapai (${blocked.used}/${blocked.limit}). Silakan upgrade plan atau coba besok.`, 429);
   const base = parseInt(String(amount), 10);
   const { code, pay } = uniqueAmount(base);
   const dynamicCode = generateDynamicQRIS(staticTemplate, pay);

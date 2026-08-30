@@ -1,13 +1,37 @@
-import { pgTable, text, integer, bigint, bigserial, boolean, pgEnum } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  integer,
+  bigint,
+  bigserial,
+  boolean,
+  pgEnum,
+} from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "customer"]);
-export const userStatusEnum = pgEnum("user_status", ["active", "suspended", "banned"]);
+export const userStatusEnum = pgEnum("user_status", [
+  "active",
+  "suspended",
+  "banned",
+]);
 export const merchantTypeEnum = pgEnum("merchant_type", ["gopay", "shopeepay"]);
-export const merchantStatusEnum = pgEnum("merchant_status", ["active", "inactive"]);
+export const merchantStatusEnum = pgEnum("merchant_status", [
+  "active",
+  "inactive",
+]);
 export const apiKeyStatusEnum = pgEnum("api_key_status", ["active", "revoked"]);
 export const planTypeEnum = pgEnum("plan_type", ["free", "paid"]);
-export const subscriptionStatusEnum = pgEnum("subscription_status", ["active", "cancelled", "expired"]);
-export const invoiceStatusEnum = pgEnum("invoice_status", ["pending", "paid", "overdue", "failed"]);
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  "active",
+  "cancelled",
+  "expired",
+]);
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "pending",
+  "paid",
+  "overdue",
+  "failed",
+]);
 
 export const qris = pgTable("qris", {
   id: text("id").primaryKey(),
@@ -52,7 +76,9 @@ export const adminSessions = pgTable("admin_sessions", {
 });
 
 export const gobizSessions = pgTable("gobiz_sessions", {
-  merchant_id: text("merchant_id").primaryKey().references(() => merchants.id),
+  merchant_id: text("merchant_id")
+    .primaryKey()
+    .references(() => merchants.id),
   data: text("data").notNull(),
   updated_at: bigint("updated_at", { mode: "number" }).notNull(),
 });
@@ -69,7 +95,9 @@ export const users = pgTable("users", {
 
 export const merchants = pgTable("merchants", {
   id: text("id").primaryKey(),
-  user_id: text("user_id").notNull().references(() => users.id),
+  user_id: text("user_id")
+    .notNull()
+    .references(() => users.id),
   type: merchantTypeEnum("type").notNull().default("gopay"),
   name: text("name").notNull(),
   gopay_merchant_id: text("gopay_merchant_id"),
@@ -82,7 +110,9 @@ export const merchants = pgTable("merchants", {
 
 export const apiKeys = pgTable("api_keys", {
   id: text("id").primaryKey(),
-  user_id: text("user_id").notNull().references(() => users.id),
+  user_id: text("user_id")
+    .notNull()
+    .references(() => users.id),
   key: text("key").notNull().unique(),
   label: text("label"),
   status: apiKeyStatusEnum("status").notNull().default("active"),
@@ -92,7 +122,9 @@ export const apiKeys = pgTable("api_keys", {
 
 export const notifications = pgTable("notifications", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  user_id: text("user_id").notNull().references(() => users.id),
+  user_id: text("user_id")
+    .notNull()
+    .references(() => users.id),
   merchant_id: text("merchant_id").references(() => merchants.id),
   type: text("type").notNull(),
   title: text("title").notNull(),
@@ -108,6 +140,7 @@ export const plans = pgTable("plans", {
   type: planTypeEnum("type").notNull().default("paid"),
   price: integer("price").notNull().default(0),
   max_merchants: integer("max_merchants").notNull().default(1),
+  daily_paid_limit: integer("daily_paid_limit"),
   features_json: text("features_json"),
   active: boolean("active").notNull().default(true),
   created_at: bigint("created_at", { mode: "number" }).notNull(),
@@ -116,8 +149,12 @@ export const plans = pgTable("plans", {
 
 export const subscriptions = pgTable("subscriptions", {
   id: text("id").primaryKey(),
-  user_id: text("user_id").notNull().references(() => users.id),
-  plan_id: text("plan_id").notNull().references(() => plans.id),
+  user_id: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  plan_id: text("plan_id")
+    .notNull()
+    .references(() => plans.id),
   status: subscriptionStatusEnum("status").notNull().default("active"),
   starts_at: bigint("starts_at", { mode: "number" }).notNull(),
   ends_at: bigint("ends_at", { mode: "number" }),
@@ -127,8 +164,12 @@ export const subscriptions = pgTable("subscriptions", {
 
 export const invoices = pgTable("invoices", {
   id: text("id").primaryKey(),
-  user_id: text("user_id").notNull().references(() => users.id),
-  subscription_id: text("subscription_id").notNull().references(() => subscriptions.id),
+  user_id: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  subscription_id: text("subscription_id")
+    .notNull()
+    .references(() => subscriptions.id),
   amount: integer("amount").notNull(),
   status: invoiceStatusEnum("status").notNull().default("pending"),
   period_start: bigint("period_start", { mode: "number" }).notNull(),
