@@ -1,6 +1,6 @@
 import type { DurableObjectNamespace } from "@cloudflare/workers-types";
 import type { Sql } from "postgres";
-import type { Db } from "./db/client";
+import type { Db } from "../db/client";
 
 export interface Env {
   HYPERDRIVE?: { connectionString: string };

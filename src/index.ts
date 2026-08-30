@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
+import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
 import { publicRoutes } from "./routes/public";
 import { adminRoutes } from "./routes/admin";
@@ -9,7 +10,7 @@ import { createDb, closeDb } from "./db/client";
 import type { AppEnv, Env } from "./types";
 import { MerchantWS } from "./durable_objects/merchantWS";
 
-const app = new Hono<AppEnv>();
+const app = new OpenAPIHono<AppEnv>();
 
 app.use("*", async (c, next) => {
   // Lifecycle DB per-request: create di context, tutup di finally — termasuk
@@ -34,6 +35,24 @@ app.use(
 app.route("/", publicRoutes);
 app.route("/api/v1", v1Routes);
 app.route("/admin", adminRoutes);
+
+app.doc("/docs/json", {
+  openapi: "3.0.3",
+  info: {
+    title: "GoMerch API",
+    version: "1.0.0",
+    description:
+      "Payment Gateway & QRIS Verification — GoPay/GoBiz. Generate QRIS dinamis EMVCo, verifikasi pembayaran via API Gojek merchant, anti double-claim.\n\nFlow: `POST /api/v1/qris` → customer bayar `amount_to_pay` → poll `GET /api/qr-status/:id` sampai `PAID`.",
+  },
+  servers: [{ url: "/" }],
+  security: [{ ApiKey: [] }],
+});
+app.openAPIRegistry.registerComponent("securitySchemes", "ApiKey", {
+  type: "apiKey",
+  in: "header",
+  name: "x-api-key",
+});
+app.get("/swagger", swaggerUI({ url: "/docs/json" }));
 
 app.get("/ws", async (c) => {
   const upgradeHeader = c.req.header("Upgrade");

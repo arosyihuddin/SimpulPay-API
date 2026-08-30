@@ -35,29 +35,37 @@ const adminAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
 };
 
-export const adminRoutes = new Hono<AppEnv>()
-  .get("/setup-status", setupStatus)
-  .post("/setup", setup)
-  .post("/login", login)
-  .post("/logout", logout)
-  .use("*", adminAuth, adminGuard)
-  .get("/me", me)
-  .post("/change-password", changePassword)
-  .get("/dashboard", dashboard)
-  .post("/qris", createQris)
-  .get("/qris", listQris)
-  .get("/transactions", listTransactions)
-  .get("/logs", listLogs)
-  .get("/users", listUsersCtl)
-  .post("/users", createUserCtl)
-  .patch("/users/:id", updateUserCtl)
-  .delete("/users/:id", deleteUserCtl)
-  .get("/settings", settings)
-  .post("/api-key", apiKey)
-  .post("/qris-parse", qrisParse)
-  .post("/qris-static", qrisStatic)
-  .post("/merchant-id", merchantId)
-  .post("/otp-request", otpRequest)
-  .post("/otp-verify", otpVerify)
-  .post("/refresh-session", refreshSessionCtl)
-  .delete("/gobiz-session", deleteGoBizCtl);
+// Admin gak masuk spec OpenAPI (swagger cuma untuk API v1) — pakai Hono biasa.
+const adminRoutes = new Hono<AppEnv>();
+
+// Open (tanpa adminGuard)
+adminRoutes.get("/setup-status", setupStatus);
+adminRoutes.post("/setup", setup);
+adminRoutes.post("/login", login);
+adminRoutes.post("/logout", logout);
+
+// Di bawah ini butuh cookie session
+adminRoutes.use("*", adminAuth, adminGuard);
+
+adminRoutes.get("/me", me);
+adminRoutes.post("/change-password", changePassword);
+adminRoutes.get("/dashboard", dashboard);
+adminRoutes.post("/qris", createQris);
+adminRoutes.get("/qris", listQris);
+adminRoutes.get("/transactions", listTransactions);
+adminRoutes.get("/logs", listLogs);
+adminRoutes.get("/users", listUsersCtl);
+adminRoutes.post("/users", createUserCtl);
+adminRoutes.patch("/users/{id}", updateUserCtl);
+adminRoutes.delete("/users/{id}", deleteUserCtl);
+adminRoutes.get("/settings", settings);
+adminRoutes.post("/api-key", apiKey);
+adminRoutes.post("/qris-parse", qrisParse);
+adminRoutes.post("/qris-static", qrisStatic);
+adminRoutes.post("/merchant-id", merchantId);
+adminRoutes.post("/otp-request", otpRequest);
+adminRoutes.post("/otp-verify", otpVerify);
+adminRoutes.post("/refresh-session", refreshSessionCtl);
+adminRoutes.delete("/gobiz-session", deleteGoBizCtl);
+
+export { adminRoutes };

@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hono/swagger-ui": "^0.6.1",
+    "@hono/zod-openapi": "^1.6.1",
     "bun": "^1.4.0",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.5",
@@ -17,7 +19,8 @@
     "jsqr": "^1.4.0",
     "pngjs": "^7.0.0",
     "postgres": "^3.4.9",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260829.1",
