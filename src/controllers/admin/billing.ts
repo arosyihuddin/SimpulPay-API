@@ -18,7 +18,7 @@ import {
   listInvoices,
   updateInvoiceStatus,
   countInvoices,
-} from "../../db/queries";
+} from "../../db/repositories";
 
 // ── Plans ──────────────────────────────────────────
 

@@ -14,7 +14,7 @@ import {
   listActiveSubscriptions,
   createInvoice,
   getPlan,
-} from "./db/queries";
+} from "./db/repositories";
 import {
   loadSession,
   isExpired,

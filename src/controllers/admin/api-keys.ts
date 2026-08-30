@@ -1,4 +1,4 @@
-import { createApiKey, deleteApiKey, listApiKeysByUser, insertLog } from "../../db/queries";
+import { createApiKey, deleteApiKey, listApiKeysByUser, insertLog } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";

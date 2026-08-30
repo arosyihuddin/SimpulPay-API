@@ -1,5 +1,5 @@
 import { goBizHeaders, buildSession, saveSession } from "./sessionManager";
-import { updateMerchant } from "../db/queries";
+import { updateMerchant } from "../db/repositories";
 import type { Db } from "../db/client";
 
 export const GOBIZ_TOKEN_URL = "https://api.gobiz.co.id/goid/token";

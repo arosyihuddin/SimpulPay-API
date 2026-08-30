@@ -5,7 +5,7 @@ import {
   getApiKeyByKey,
   getMerchant,
   updateApiKey,
-} from "../db/queries";
+} from "../db/repositories";
 import { getDb, type Db } from "../db/client";
 import { getUserById } from "../db/repositories/user.repository";
 import { fail } from "./errorHandler";

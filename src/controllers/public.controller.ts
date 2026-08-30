@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import { getQRIS, markQRISPaid, markQRISExpired, insertLog } from "../db/queries";
+import { getQRIS, markQRISPaid, markQRISExpired, insertLog } from "../db/repositories";
 import { verifyPayment } from "../services/gojek";
 import type { Context } from "hono";
 import type { AppEnv } from "../types";

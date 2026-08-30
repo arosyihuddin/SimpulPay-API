@@ -1,4 +1,4 @@
-import { saveGoBizSession, loadGoBizSession } from '../db/queries';
+import { saveGoBizSession, loadGoBizSession } from '../db/repositories';
 import type { Db } from '../db/client';
 
 const GOBIZ_TOKEN_URL = 'https://api.gobiz.co.id/goid/token';

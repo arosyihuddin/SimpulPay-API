@@ -1,4 +1,4 @@
-import { insertQRIS, listQRIS, countQRIS, markQRISExpired, insertLog, recentLogs, countLogs } from "../../db/queries";
+import { insertQRIS, listQRIS, countQRIS, markQRISExpired, insertLog, recentLogs, countLogs } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";

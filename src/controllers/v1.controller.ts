@@ -22,7 +22,7 @@ import {
   insertLog,
   recentLogs,
   getMerchant,
-} from "../db/queries";
+} from "../db/repositories";
 import { fail, ok } from "../middleware/errorHandler";
 import { checkDailyPaidLimit } from "../services/limits";
 

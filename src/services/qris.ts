@@ -1,4 +1,4 @@
-import { getMerchant, updateMerchant } from '../db/queries';
+import { getMerchant, updateMerchant } from '../db/repositories';
 import type { Db } from '../db/client';
 const QRIS_EXPIRY_MS = 5 * 60 * 1000;
 

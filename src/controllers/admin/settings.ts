@@ -2,7 +2,7 @@ import { requestOtp, verifyOtp, normalizePhone } from "../../services/gobizAuth"
 import { loadSession, refreshSession } from "../../services/sessionManager";
 import { setQrisStatic, setMerchantId, parseQrisTlv } from "../../services/qris";
 import { decodeQRCodeFromImage } from "../../services/qrDecoder";
-import { deleteGoBizSession, insertLog, listMerchantsByUser, listApiKeysByUser } from "../../db/queries";
+import { deleteGoBizSession, insertLog, listMerchantsByUser, listApiKeysByUser } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";

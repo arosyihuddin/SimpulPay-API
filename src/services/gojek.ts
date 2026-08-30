@@ -1,5 +1,5 @@
 import { getValidHeaders, refreshSession } from "./sessionManager";
-import { claimTx, getClaim, getMerchant, insertLog, insertNotification } from "../db/queries";
+import { claimTx, getClaim, getMerchant, insertLog, insertNotification } from "../db/repositories";
 import { getMerchantId } from "./qris";
 import { checkDailyPaidLimit } from "./limits";
 import type { Db } from "../db/client";

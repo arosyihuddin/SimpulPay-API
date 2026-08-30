@@ -1,5 +1,5 @@
 import type { Db } from "../db/client";
-import { getMerchant, getActiveSubscription, getPlan, countPaidToday } from "../db/queries";
+import { getMerchant, getActiveSubscription, getPlan, countPaidToday } from "../db/repositories";
 
 /**
  * Cek batas transaksi PAID harian untuk user pemilik merchant.

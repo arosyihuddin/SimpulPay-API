@@ -1,4 +1,4 @@
-import { listNotificationsByUser, markNotificationRead, countUnreadNotifications } from "../../db/queries";
+import { listNotificationsByUser, markNotificationRead, countUnreadNotifications } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";

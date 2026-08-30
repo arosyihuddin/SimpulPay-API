@@ -1,4 +1,4 @@
-import { createMerchant, getMerchant, listMerchantsByUser, countMerchantsByUser, updateMerchant, deleteMerchant, deleteGoBizSession, insertLog, getActiveSubscription, getPlan } from "../../db/queries";
+import { createMerchant, getMerchant, listMerchantsByUser, countMerchantsByUser, updateMerchant, deleteMerchant, deleteGoBizSession, insertLog, getActiveSubscription, getPlan } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";

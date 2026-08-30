@@ -6,7 +6,7 @@ import {
   deleteAdminSession,
   getAdminSession,
   createMerchant,
-} from "../../db/queries";
+} from "../../db/repositories";
 import {
   listUsers,
   getUserById,
@@ -23,7 +23,7 @@ import {
   listInvoices,
   createSubscription,
   createInvoice,
-} from "../../db/queries";
+} from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { Db, getDb } from "../../db/client";
