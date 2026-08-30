@@ -36,6 +36,11 @@ import {
   deleteMerchantCtl,
   listNotificationsCtl,
   markNotificationReadCtl,
+  createAnnouncementCtl,
+  listAnnouncementsCtl,
+  getAnnouncementCtl,
+  updateAnnouncementCtl,
+  deleteAnnouncementCtl,
   createPlanCtl,
   listPlansCtl,
   getPlanCtl,
@@ -95,6 +100,13 @@ adminRoutes.delete("/api-keys/{id}", deleteApiKeyCtl);
 // Notifications
 adminRoutes.get("/notifications", listNotificationsCtl);
 adminRoutes.post("/notifications/{id}/read", markNotificationReadCtl);
+
+// Announcements (broadcast admin ke semua user)
+adminRoutes.post("/announcements", createAnnouncementCtl);
+adminRoutes.get("/announcements", listAnnouncementsCtl);
+adminRoutes.get("/announcements/{id}", getAnnouncementCtl);
+adminRoutes.patch("/announcements/{id}", updateAnnouncementCtl);
+adminRoutes.delete("/announcements/{id}", deleteAnnouncementCtl);
 
 // Settings
 adminRoutes.get("/settings", merchantGuard, settings);

@@ -15,6 +15,13 @@
       "when": 1788110090627,
       "tag": "0001_daily_paid_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788114543285,
+      "tag": "0002_easy_grim_reaper",
+      "breakpoints": true
     }
   ]
 }

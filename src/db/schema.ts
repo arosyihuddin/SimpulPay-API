@@ -162,6 +162,15 @@ export const subscriptions = pgTable("subscriptions", {
   updated_at: bigint("updated_at", { mode: "number" }).notNull(),
 });
 
+export const announcements = pgTable("announcements", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").notNull().default("info"),
+  active: boolean("active").notNull().default(true),
+  created_at: bigint("created_at", { mode: "number" }).notNull(),
+});
+
 export const invoices = pgTable("invoices", {
   id: text("id").primaryKey(),
   user_id: text("user_id")
