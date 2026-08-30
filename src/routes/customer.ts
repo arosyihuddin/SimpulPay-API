@@ -35,50 +35,50 @@ import {
 // Customer gak masuk spec OpenAPI (swagger cuma untuk API v1) — pakai Hono biasa.
 const customerRoutes = new Hono<AppEnv>();
 
-// Di bawah ini butuh cookie session
-customerRoutes.use("*", cookieAuth, customerGuard);
+// Semua route butuh cookie session (role apa pun)
+const customerAuth = [cookieAuth, customerGuard] as const;
 
-customerRoutes.get("/me", me);
-customerRoutes.post("/change-password", changePassword);
+customerRoutes.get("/me", ...customerAuth, me);
+customerRoutes.post("/change-password", ...customerAuth, changePassword);
 
 // Dashboard: butuh merchant (query/header)
-customerRoutes.get("/dashboard", merchantGuard, dashboard);
-customerRoutes.post("/qris", merchantGuard, createQris);
-customerRoutes.get("/qris", merchantGuard, listQris);
-customerRoutes.get("/transactions", merchantGuard, listTransactions);
+customerRoutes.get("/dashboard", ...customerAuth, merchantGuard, dashboard);
+customerRoutes.post("/qris", ...customerAuth, merchantGuard, createQris);
+customerRoutes.get("/qris", ...customerAuth, merchantGuard, listQris);
+customerRoutes.get("/transactions", ...customerAuth, merchantGuard, listTransactions);
 
 // Merchant CRUD (tanpa merchantGuard — create/read/list pake userId)
-customerRoutes.post("/merchants", createMerchantCtl);
-customerRoutes.get("/merchants", listMerchantsCtl);
-customerRoutes.patch("/merchants/{id}", merchantGuard, updateMerchantCtl);
-customerRoutes.delete("/merchants/{id}", merchantGuard, deleteMerchantCtl);
+customerRoutes.post("/merchants", ...customerAuth, createMerchantCtl);
+customerRoutes.get("/merchants", ...customerAuth, listMerchantsCtl);
+customerRoutes.patch("/merchants/{id}", ...customerAuth, merchantGuard, updateMerchantCtl);
+customerRoutes.delete("/merchants/{id}", ...customerAuth, merchantGuard, deleteMerchantCtl);
 
 // API keys
-customerRoutes.post("/api-keys", createApiKeyCtl);
-customerRoutes.get("/api-keys", listApiKeysCtl);
-customerRoutes.delete("/api-keys/{id}", deleteApiKeyCtl);
+customerRoutes.post("/api-keys", ...customerAuth, createApiKeyCtl);
+customerRoutes.get("/api-keys", ...customerAuth, listApiKeysCtl);
+customerRoutes.delete("/api-keys/{id}", ...customerAuth, deleteApiKeyCtl);
 
 // Notifications
-customerRoutes.get("/notifications", listNotificationsCtl);
-customerRoutes.post("/notifications/{id}/read", markNotificationReadCtl);
+customerRoutes.get("/notifications", ...customerAuth, listNotificationsCtl);
+customerRoutes.post("/notifications/{id}/read", ...customerAuth, markNotificationReadCtl);
 
 // Settings
-customerRoutes.get("/settings", merchantGuard, settings);
-customerRoutes.post("/qris-parse", qrisParse);
-customerRoutes.post("/qris-static", merchantGuard, qrisStatic);
-customerRoutes.post("/merchant-id", merchantGuard, merchantId);
-customerRoutes.post("/otp-request", otpRequest);
-customerRoutes.post("/otp-verify", merchantGuard, otpVerify);
-customerRoutes.post("/refresh-session", merchantGuard, refreshSessionCtl);
-customerRoutes.delete("/gobiz-session", merchantGuard, deleteGoBizCtl);
+customerRoutes.get("/settings", ...customerAuth, merchantGuard, settings);
+customerRoutes.post("/qris-parse", ...customerAuth, qrisParse);
+customerRoutes.post("/qris-static", ...customerAuth, merchantGuard, qrisStatic);
+customerRoutes.post("/merchant-id", ...customerAuth, merchantGuard, merchantId);
+customerRoutes.post("/otp-request", ...customerAuth, otpRequest);
+customerRoutes.post("/otp-verify", ...customerAuth, merchantGuard, otpVerify);
+customerRoutes.post("/refresh-session", ...customerAuth, merchantGuard, refreshSessionCtl);
+customerRoutes.delete("/gobiz-session", ...customerAuth, merchantGuard, deleteGoBizCtl);
 
 // Billing: customer baca plan, self-service subscribe
-customerRoutes.get("/plans", listPlansCtl);
-customerRoutes.get("/plans/{id}", getPlanCtl);
-customerRoutes.post("/subscriptions", createSubscriptionCtl);
+customerRoutes.get("/plans", ...customerAuth, listPlansCtl);
+customerRoutes.get("/plans/{id}", ...customerAuth, getPlanCtl);
+customerRoutes.post("/subscriptions", ...customerAuth, createSubscriptionCtl);
 
 // Announcements: baca broadcast
-customerRoutes.get("/announcements", listAnnouncementsCtl);
-customerRoutes.get("/announcements/{id}", getAnnouncementCtl);
+customerRoutes.get("/announcements", ...customerAuth, listAnnouncementsCtl);
+customerRoutes.get("/announcements/{id}", ...customerAuth, getAnnouncementCtl);
 
 export { customerRoutes };

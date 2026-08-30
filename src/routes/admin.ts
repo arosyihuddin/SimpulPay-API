@@ -17,43 +17,36 @@ import { listAnnouncementsCtl, getAnnouncementCtl } from "../controllers/custome
 import { listPlansCtl, getPlanCtl } from "../controllers/customer/billing";
 
 // Admin gak masuk spec OpenAPI (swagger cuma untuk API v1) — pakai Hono biasa.
-const adminPublicRoutes = new Hono<AppEnv>();
-
-// Setup bootstrap — open, gak kena guard (bikin admin pertama, pre-auth)
-adminPublicRoutes.get("/setup-status", setupStatus);
-adminPublicRoutes.post("/setup", setup);
-
 const adminRoutes = new Hono<AppEnv>();
 
-// Di bawah ini butuh cookie session + role admin
-adminRoutes.use("*", cookieAuth, adminGuard);
+// Setup bootstrap — open (bikin admin pertama, pre-auth)
+adminRoutes.get("/setup-status", setupStatus);
+adminRoutes.post("/setup", setup);
 
-adminRoutes.post("/change-password", changePassword);
+// Sisanya butuh cookie session + role admin
+const adminAuth = [cookieAuth, adminGuard] as const;
 
-adminRoutes.get("/logs", listLogs);
-adminRoutes.get("/users", listUsersCtl);
-adminRoutes.post("/users", createUserCtl);
-adminRoutes.patch("/users/{id}", updateUserCtl);
-adminRoutes.delete("/users/{id}", deleteUserCtl);
+adminRoutes.post("/change-password", ...adminAuth, changePassword);
+adminRoutes.get("/logs", ...adminAuth, listLogs);
+adminRoutes.get("/users", ...adminAuth, listUsersCtl);
+adminRoutes.post("/users", ...adminAuth, createUserCtl);
+adminRoutes.patch("/users/{id}", ...adminAuth, updateUserCtl);
+adminRoutes.delete("/users/{id}", ...adminAuth, deleteUserCtl);
+adminRoutes.post("/announcements", ...adminAuth, createAnnouncementCtl);
+adminRoutes.get("/announcements", ...adminAuth, listAnnouncementsCtl);
+adminRoutes.get("/announcements/{id}", ...adminAuth, getAnnouncementCtl);
+adminRoutes.patch("/announcements/{id}", ...adminAuth, updateAnnouncementCtl);
+adminRoutes.delete("/announcements/{id}", ...adminAuth, deleteAnnouncementCtl);
+adminRoutes.post("/plans", ...adminAuth, createPlanCtl);
+adminRoutes.get("/plans", ...adminAuth, listPlansCtl);
+adminRoutes.get("/plans/{id}", ...adminAuth, getPlanCtl);
+adminRoutes.patch("/plans/{id}", ...adminAuth, updatePlanCtl);
+adminRoutes.delete("/plans/{id}", ...adminAuth, deletePlanCtl);
+adminRoutes.get("/subscriptions", ...adminAuth, listSubscriptionsCtl);
+adminRoutes.get("/subscriptions/{id}", ...adminAuth, getSubscriptionCtl);
+adminRoutes.post("/subscriptions/{id}/cancel", ...adminAuth, cancelSubscriptionCtl);
+adminRoutes.get("/invoices", ...adminAuth, listInvoicesCtl);
+adminRoutes.get("/invoices/{id}", ...adminAuth, getInvoiceCtl);
+adminRoutes.post("/invoices/{id}/paid", ...adminAuth, markInvoicePaidCtl);
 
-// Announcements (admin write; read di customer routes)
-adminRoutes.post("/announcements", createAnnouncementCtl);
-adminRoutes.get("/announcements", listAnnouncementsCtl);
-adminRoutes.get("/announcements/{id}", getAnnouncementCtl);
-adminRoutes.patch("/announcements/{id}", updateAnnouncementCtl);
-adminRoutes.delete("/announcements/{id}", deleteAnnouncementCtl);
-
-// Billing: admin write plans + subscriptions/invoices admin
-adminRoutes.post("/plans", createPlanCtl);
-adminRoutes.get("/plans", listPlansCtl);
-adminRoutes.get("/plans/{id}", getPlanCtl);
-adminRoutes.patch("/plans/{id}", updatePlanCtl);
-adminRoutes.delete("/plans/{id}", deletePlanCtl);
-adminRoutes.get("/subscriptions", listSubscriptionsCtl);
-adminRoutes.get("/subscriptions/{id}", getSubscriptionCtl);
-adminRoutes.post("/subscriptions/{id}/cancel", cancelSubscriptionCtl);
-adminRoutes.get("/invoices", listInvoicesCtl);
-adminRoutes.get("/invoices/{id}", getInvoiceCtl);
-adminRoutes.post("/invoices/{id}/paid", markInvoicePaidCtl);
-
-export { adminPublicRoutes, adminRoutes };
+export { adminRoutes };
