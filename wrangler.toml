@@ -21,4 +21,4 @@ type = "durable-object"
 storage = "sqlite"
 
 [triggers]
-crons = ["0 * * * *", "0 */6 * * *"]
+crons = ["0 * * * *", "0 0 1 * *", "0 */6 * * *"]
