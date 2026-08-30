@@ -14,7 +14,7 @@ fallthrough = true
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "441c52770a4b49a7a8c4bc9d9a3ed93a"
+id = "e6057f31cf624dbb99f1f4b4928f1f49"
 
 [exports.MerchantWS]
 type = "durable-object"

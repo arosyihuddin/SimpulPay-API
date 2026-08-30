@@ -41,10 +41,6 @@ export function createDb(env: Env): DbHandle {
   return createHandle(env);
 }
 
-// Client per-request, disimpan di Hono context. CF Workers: binding/env object
-// DI-SHARE antar request dalam satu isolate, jadi cache module-level/WeakMap
-// akan memakai ulang socket request sebelumnya -> "Cannot perform I/O on behalf
-// of a different request". Satu request = satu client = satu socket = aman.
 export function getDb(c: Context<AppEnv>): Db {
   const existing = c.get("db");
   if (existing) return existing.db;
@@ -53,15 +49,11 @@ export function getDb(c: Context<AppEnv>): Db {
   return handle.db;
 }
 
-// Tutup client dalam konteks request yang sama (dipanggil dari middleware
-// finally). Krusial di jalur ERROR: kalau handler lempar, client yang bocor
-// punya pending write yang baru mengeksekusi di request berikutnya -> I/O error.
 export async function closeDb(c: Context<AppEnv>): Promise<void> {
   const handle = c.get("db");
   if (!handle) return;
   try {
     await handle.client.end();
-  } catch {
-  }
+  } catch {}
   c.set("db", null);
 }
