@@ -27,7 +27,16 @@ app.use("*", async (c, next) => {
 app.use(
   "*",
   cors({
-    origin: ["https://gomerch-client.pages.dev", "http://localhost:5173"],
+    // Allow-list dari env CORS_ORIGINS (comma). Kosong → reflect origin apa aja,
+    // biar deploy frontend gak kena blok. Ketatkan di production via env.
+    origin: (origin, c) => {
+      const allowed = (c.env.CORS_ORIGINS ?? "")
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+      if (allowed.length === 0) return origin;
+      return origin && allowed.includes(origin) ? origin : null;
+    },
     credentials: true,
   }),
 );

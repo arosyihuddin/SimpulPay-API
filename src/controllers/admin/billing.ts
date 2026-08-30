@@ -131,7 +131,22 @@ export async function createSubscriptionCtl(c: Context<AppEnv>) {
 export async function listSubscriptionsCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = c.req.query("user_id") || undefined;
+  const includeFree = c.req.query("include_free") === "1";
   const list = await listSubscriptions(DB, userId);
+  if (!includeFree) {
+    // Default: filter non-free plan. Batch lookup plan sekali buat avoid N+1.
+    const planTypes = new Map<string, string>();
+    for (const s of list) {
+      if (!planTypes.has(s.plan_id)) {
+        const p = await getPlan(DB, s.plan_id);
+        planTypes.set(s.plan_id, p?.type ?? "paid");
+      }
+    }
+    return c.json({
+      success: true,
+      data: { subscriptions: list.filter((s) => planTypes.get(s.plan_id) !== "free") },
+    });
+  }
   return c.json({ success: true, data: { subscriptions: list } });
 }
 

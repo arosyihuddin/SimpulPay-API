@@ -6,6 +6,7 @@ export interface Env {
   HYPERDRIVE?: { connectionString: string };
   DATABASE_URL?: string;
   MERCHANT_WS: DurableObjectNamespace;
+  CORS_ORIGINS?: string;
 }
 
 export type AppEnv = {
