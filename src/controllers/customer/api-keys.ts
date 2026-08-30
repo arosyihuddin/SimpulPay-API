@@ -12,7 +12,7 @@ export async function createApiKeyCtl(c: Context<AppEnv>) {
   const key = "gm_" + bufToHex(crypto.getRandomValues(new Uint8Array(32)).buffer);
   const id = "k_" + crypto.randomUUID().slice(0, 8);
   await createApiKey(DB, { id, userId, key, label });
-  await insertLog(DB, "INFO", "API key digenerate baru" + (label ? " (" + label + ")" : ""));
+  await insertLog(DB, "INFO", "API key digenerate baru" + (label ? " (" + label + ")" : ""), null, userId);
   return c.json({ success: true, data: { id, api_key: key, api_key_masked: key.slice(0, 4) + "****" } });
 }
 
@@ -33,6 +33,6 @@ export async function deleteApiKeyCtl(c: Context<AppEnv>) {
   const keys = await listApiKeysByUser(DB, currentUserId(c));
   if (!keys.some((k) => k.id === id)) bad("API key tidak ditemukan", 404);
   await deleteApiKey(DB, id);
-  await insertLog(DB, "INFO", "API key dihapus");
+  await insertLog(DB, "INFO", "API key dihapus", null, currentUserId(c));
   return c.json({ success: true });
 }

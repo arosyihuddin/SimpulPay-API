@@ -5,6 +5,7 @@ import {
   me,
   changePassword,
   dashboard,
+  listLogsCtl,
   createQris,
   listQris,
   listTransactions,
@@ -43,6 +44,7 @@ customerRoutes.post("/change-password", ...customerAuth, changePassword);
 
 // Dashboard: butuh merchant (query/header)
 customerRoutes.get("/dashboard", ...customerAuth, merchantGuard, dashboard);
+customerRoutes.get("/logs", ...customerAuth, listLogsCtl);
 customerRoutes.post("/qris", ...customerAuth, merchantGuard, createQris);
 customerRoutes.get("/qris", ...customerAuth, merchantGuard, listQris);
 customerRoutes.get("/transactions", ...customerAuth, merchantGuard, listTransactions);

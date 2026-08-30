@@ -60,6 +60,7 @@ export const logs = pgTable("logs", {
   type: text("type").notNull(),
   message: text("message").notNull(),
   details_json: text("details_json"),
+  user_id: text("user_id"),
 });
 
 export const settings = pgTable("settings", {

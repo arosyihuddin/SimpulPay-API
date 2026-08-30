@@ -43,7 +43,7 @@ export async function qrisStatic(c: Context<AppEnv>) {
   const code = body?.code as string | undefined;
   if (!code) bad("Kode QRIS wajib dikirim");
   await setQrisStatic(DB, merchantId, code);
-  await insertLog(DB, "INFO", "QRIS static di-update | Merchant " + merchantId + " (" + code.slice(0, 12) + "...)");
+  await insertLog(DB, "INFO", "QRIS static di-update | Merchant " + merchantId + " (" + code.slice(0, 12) + "...)", null, currentUserId(c));
   return c.json({ success: true });
 }
 
@@ -54,7 +54,7 @@ export async function merchantId(c: Context<AppEnv>) {
   const id = body?.merchant_id as string | undefined;
   if (!id) bad("Merchant ID wajib dikirim");
   await setMerchantId(DB, merchantId, id);
-  await insertLog(DB, "INFO", "Merchant ID di-update (" + id + ")");
+  await insertLog(DB, "INFO", "Merchant ID di-update (" + id + ")", null, currentUserId(c));
   return c.json({ success: true });
 }
 
@@ -63,7 +63,7 @@ export async function otpRequest(c: Context<AppEnv>) {
   const body = await c.req.json();
   if (!body?.phone) bad("Nomor HP wajib diisi");
   const { otpToken, expiresIn, uniqueId } = await requestOtp(body.phone);
-  await insertLog(DB, "INFO", "OTP dikirim ke " + normalizePhone(body.phone).display);
+  await insertLog(DB, "INFO", "OTP dikirim ke " + normalizePhone(body.phone).display, null, currentUserId(c));
   return c.json({ success: true, data: { otp_token: otpToken, expires_in: expiresIn, unique_id: uniqueId } });
 }
 
@@ -73,7 +73,7 @@ export async function otpVerify(c: Context<AppEnv>) {
   const body = await c.req.json();
   if (!body?.phone || !body?.otp || !body?.otp_token) bad("phone, otp, otp_token wajib diisi");
   const session = await verifyOtp(body.phone, body.otp, body.otp_token, body.unique_id, DB, merchantId);
-  await insertLog(DB, "SUCCESS", "Login GoBiz berhasil | " + session.phone_number + " | " + session.outlet_name + " | Merchant " + merchantId);
+  await insertLog(DB, "SUCCESS", "Login GoBiz berhasil | " + session.phone_number + " | " + session.outlet_name + " | Merchant " + merchantId, null, currentUserId(c));
   return c.json({ success: true, data: { phone_number: session.phone_number, merchant_id: session.merchant_id, outlet_name: session.outlet_name, expires_at: session.expires_at } });
 }
 
@@ -84,7 +84,7 @@ export async function refreshSessionCtl(c: Context<AppEnv>) {
   if (!session || !session.refresh_token) bad("Tidak ada sesi GoBiz untuk di-refresh. Login dulu.");
   const refreshed = await refreshSession(DB, merchantId);
   if (!refreshed) bad("Auto-refresh gagal. Login ulang diperlukan.", 502);
-  await insertLog(DB, "INFO", "Admin memicu auto-refresh sesi GoBiz | Merchant " + merchantId);
+  await insertLog(DB, "INFO", "Admin memicu auto-refresh sesi GoBiz | Merchant " + merchantId, null, currentUserId(c));
   return c.json({ success: true, data: { expires_at: refreshed.expires_at } });
 }
 
@@ -92,6 +92,6 @@ export async function deleteGoBizCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const merchantId = reqMerchant(c);
   await deleteGoBizSession(DB, merchantId);
-  await insertLog(DB, "INFO", "Sesi GoBiz dihapus admin | Merchant " + merchantId + ". Perlu login OTP ulang.");
+  await insertLog(DB, "INFO", "Sesi GoBiz dihapus admin | Merchant " + merchantId + ". Perlu login OTP ulang.", null, currentUserId(c));
   return c.json({ success: true });
 }

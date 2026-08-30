@@ -1,4 +1,4 @@
-import { insertQRIS, listQRIS, countQRIS, markQRISExpired, insertLog } from "../../db/repositories";
+import { insertQRIS, listQRIS, countQRIS, markQRISExpired, insertLog, recentLogsByUser, countLogsByUser } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
@@ -6,7 +6,7 @@ import { loadSession, isExpired } from "../../services/sessionManager";
 import { generateDynamicQRIS, qrisExpiryMs, uniqueAmount, getQrisStatic } from "../../services/qris";
 import { formatTransaction, toRupiah } from "../../services/gojek";
 import { broadcast } from "../../services/realtime";
-import { bad, reqMerchant, fetchMonthTransactions } from "./helpers";
+import { bad, reqMerchant, fetchMonthTransactions, currentUserId } from "./helpers";
 import { checkDailyPaidLimit } from "../../services/limits";
 
 export async function dashboard(c: Context<AppEnv>) {
@@ -78,6 +78,21 @@ export async function listQris(c: Context<AppEnv>) {
   const offset = parseInt((q.offset as string) || "0", 10);
   await markQRISExpired(DB, Date.now(), merchantId);
   return c.json({ success: true, data: { qris: await listQRIS(DB, limit, offset, merchantId), total: await countQRIS(DB, merchantId) } });
+}
+
+export async function listLogsCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  const q = c.req.query();
+  const limit = parseInt((q.limit as string) || "100", 10);
+  const offset = parseInt((q.offset as string) || "0", 10);
+  return c.json({
+    success: true,
+    data: {
+      logs: await recentLogsByUser(DB, userId, limit, offset),
+      total: await countLogsByUser(DB, userId),
+    },
+  });
 }
 
 export async function listTransactions(c: Context<AppEnv>) {

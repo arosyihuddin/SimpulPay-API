@@ -23,7 +23,7 @@ export async function createMerchantCtl(c: Context<AppEnv>) {
 
   const id = "m_" + crypto.randomUUID().slice(0, 8);
   await createMerchant(DB, { id, userId, name, type, gopayMerchantId: body?.gopay_merchant_id ? String(body.gopay_merchant_id) : null, qrisStatic: body?.qris_static ? String(body.qris_static) : null });
-  await insertLog(DB, "INFO", "Merchant dibuat: " + name + " (" + type + ")");
+  await insertLog(DB, "INFO", "Merchant dibuat: " + name + " (" + type + ")", null, userId);
   return c.json({ success: true, data: { id } });
 }
 
@@ -64,7 +64,7 @@ export async function updateMerchantCtl(c: Context<AppEnv>) {
     patch.status = status;
   }
   await updateMerchant(DB, id, patch);
-  await insertLog(DB, "INFO", "Merchant diubah: " + merchant.name);
+  await insertLog(DB, "INFO", "Merchant diubah: " + merchant.name, null, userId);
   return c.json({ success: true });
 }
 
@@ -77,6 +77,6 @@ export async function deleteMerchantCtl(c: Context<AppEnv>) {
   if (merchant.user_id !== userId) bad("Akses ditolak", 403);
   await deleteGoBizSession(DB, id);
   await deleteMerchant(DB, id);
-  await insertLog(DB, "INFO", "Merchant dihapus: " + merchant.name);
+  await insertLog(DB, "INFO", "Merchant dihapus: " + merchant.name, null, userId);
   return c.json({ success: true });
 }

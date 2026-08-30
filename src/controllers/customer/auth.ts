@@ -16,7 +16,7 @@ import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
 import { cookieToken } from "../../utils/auth.helper";
-import { bad, cookieHeader, SESSION_MAX_AGE } from "./helpers";
+import { bad, cookieHeader, SESSION_MAX_AGE, currentUserId } from "./helpers";
 
 export async function login(c: Context<AppEnv>) {
   const DB = getDb(c);
@@ -33,7 +33,7 @@ export async function login(c: Context<AppEnv>) {
     bad("Akun tidak aktif (suspended/banned). Hubungi admin.", 403);
   const token = crypto.randomUUID();
   await createAdminSession(DB, token, ADMIN_TTL_MS, user.id);
-  await insertLog(DB, "INFO", "Admin login sukses: " + username);
+  await insertLog(DB, "INFO", "Login sukses: " + username, null, user.id);
   c.header("Set-Cookie", cookieHeader(token, SESSION_MAX_AGE));
   return c.json({ success: true });
 }
@@ -42,8 +42,9 @@ export async function logout(c: Context<AppEnv>) {
   const DB = getDb(c);
   const token = cookieToken(c);
   if (token) {
+    const s = await getAdminSession(DB, token);
     await deleteAdminSession(DB, token);
-    await insertLog(DB, "INFO", "Admin logout");
+    await insertLog(DB, "INFO", "Logout", null, s?.user_id);
   }
   c.header("Set-Cookie", cookieHeader("", 0));
   return c.json({ success: true });
@@ -90,6 +91,6 @@ export async function changePassword(c: Context<AppEnv>) {
     bad("Password lama salah", 401);
   if (newPassword.length < 8) bad("Password baru minimal 8 karakter");
   await updateUserPassword(DB, user.id, await hashPassword(newPassword));
-  await insertLog(DB, "INFO", "Password admin '" + username + "' diubah");
+  await insertLog(DB, "INFO", "Password '" + username + "' diubah", null, currentUserId(c));
   return c.json({ success: true });
 }
