@@ -4,8 +4,22 @@ import { cors } from "hono/cors";
 import { publicRoutes } from "./routes/public";
 import { adminRoutes } from "./routes/admin";
 import { v1Routes } from "./routes/v1";
-import { cleanOldClaims, cleanExpiredSessions, markQRISExpired, insertLog, listAllMerchants, insertNotification, listActiveSubscriptions, createInvoice, getPlan } from "./db/queries";
-import { loadSession, isExpired, refreshSession } from "./services/sessionManager";
+import {
+  cleanOldClaims,
+  cleanExpiredSessions,
+  markQRISExpired,
+  insertLog,
+  listAllMerchants,
+  insertNotification,
+  listActiveSubscriptions,
+  createInvoice,
+  getPlan,
+} from "./db/queries";
+import {
+  loadSession,
+  isExpired,
+  refreshSession,
+} from "./services/sessionManager";
 import { createDb, closeDb } from "./db/client";
 import type { AppEnv, Env } from "./types";
 import { MerchantWS } from "./durable_objects/merchantWS";
@@ -13,9 +27,6 @@ import { MerchantWS } from "./durable_objects/merchantWS";
 const app = new OpenAPIHono<AppEnv>();
 
 app.use("*", async (c, next) => {
-  // Lifecycle DB per-request: create di context, tutup di finally — termasuk
-  // jalur ERROR (kalau handler lempar, client tak boleh bocor ke request
-  // berikutnya; pending write-nya akan nulis ke konteks request beda).
   c.set("db", null);
   try {
     await next();
@@ -27,8 +38,6 @@ app.use("*", async (c, next) => {
 app.use(
   "*",
   cors({
-    // Allow-list dari env CORS_ORIGINS (comma). Kosong → reflect origin apa aja,
-    // biar deploy frontend gak kena blok. Ketatkan di production via env.
     origin: (origin, c) => {
       const allowed = (c.env.CORS_ORIGINS ?? "")
         .split(",")
@@ -72,7 +81,9 @@ app.get("/ws", async (c) => {
   const stub = c.env.MERCHANT_WS.get(c.env.MERCHANT_WS.idFromName("global"));
   const url = new URL("http://internal");
   url.searchParams.set("scope", scope);
-  return stub.fetch(new Request(url.toString(), { headers: { Upgrade: "websocket" } }));
+  return stub.fetch(
+    new Request(url.toString(), { headers: { Upgrade: "websocket" } }),
+  );
 });
 
 app.get("*", (c) => c.json({ success: false, message: "Not Found" }, 404));
@@ -120,7 +131,11 @@ export default {
             });
           }
         } catch (err) {
-          await insertLog(DB, "ERROR", `Gagal generate invoice subscription ${s.id}: ${(err as Error).message}`);
+          await insertLog(
+            DB,
+            "ERROR",
+            `Gagal generate invoice subscription ${s.id}: ${(err as Error).message}`,
+          );
         }
       }
     } else if (event.cron === "0 */6 * * *") {
@@ -130,7 +145,11 @@ export default {
         try {
           const session = await loadSession(DB, m.id);
           if (session && session.refresh_token && isExpired(session)) {
-            await insertLog(DB, "INFO", `Auto Refresh: Token merchant ${m.id} mendekati kedaluwarsa, memperbarui sesi...`);
+            await insertLog(
+              DB,
+              "INFO",
+              `Auto Refresh: Token merchant ${m.id} mendekati kedaluwarsa, memperbarui sesi...`,
+            );
             const refreshed = await refreshSession(DB, m.id);
             if (!refreshed) {
               await insertNotification(DB, {
@@ -143,7 +162,11 @@ export default {
             }
           }
         } catch (err) {
-          await insertLog(DB, "ERROR", `Gagal auto refresh session merchant ${m.id}: ${(err as Error).message}`);
+          await insertLog(
+            DB,
+            "ERROR",
+            `Gagal auto refresh session merchant ${m.id}: ${(err as Error).message}`,
+          );
         }
       }
     }
