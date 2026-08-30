@@ -1,30 +1,25 @@
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
-import { bad, currentUserId, paramId } from "./helpers";
+import { bad, paramId } from "./helpers";
 import {
   createPlan,
   getPlan,
-  listPlans,
   updatePlan,
   deletePlan,
-  createSubscription,
   getSubscription,
-  getActiveSubscription,
   listSubscriptions,
   updateSubscription,
-  createInvoice,
   getInvoice,
   listInvoices,
   updateInvoiceStatus,
   countInvoices,
 } from "../../db/repositories";
 
-// ── Plans ──────────────────────────────────────────
+// ── Plans (admin write) ─────────────────────────────
 
 export async function createPlanCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
-  currentUserId(c);
   const body = await c.req.json();
   const name = (body?.name || "").trim();
   if (name.length < 2) bad("Nama plan minimal 2 karakter");
@@ -42,24 +37,8 @@ export async function createPlanCtl(c: Context<AppEnv>) {
   return c.json({ success: true, data: { id } });
 }
 
-export async function listPlansCtl(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const onlyActive = c.req.query("active") !== "0";
-  const plans = await listPlans(DB, onlyActive);
-  return c.json({ success: true, data: { plans } });
-}
-
-export async function getPlanCtl(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const id = paramId(c);
-  const plan = await getPlan(DB, id);
-  if (!plan) bad("Plan tidak ditemukan", 404);
-  return c.json({ success: true, data: plan });
-}
-
 export async function updatePlanCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
-  currentUserId(c);
   const id = paramId(c);
   if (!(await getPlan(DB, id))) bad("Plan tidak ditemukan", 404);
   const body = await c.req.json();
@@ -84,49 +63,13 @@ export async function updatePlanCtl(c: Context<AppEnv>) {
 
 export async function deletePlanCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
-  currentUserId(c);
   const id = paramId(c);
   if (!(await getPlan(DB, id))) bad("Plan tidak ditemukan", 404);
   await deletePlan(DB, id);
   return c.json({ success: true });
 }
 
-// ── Subscriptions ──────────────────────────────────
-
-export async function createSubscriptionCtl(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const userId = currentUserId(c);
-  const body = await c.req.json();
-  const planId = body?.plan_id;
-  if (!planId) bad("plan_id wajib diisi");
-  if (!(await getPlan(DB, planId))) bad("Plan tidak ditemukan", 404);
-
-  const existing = await getActiveSubscription(DB, userId);
-  if (existing) bad("User sudah punya subscription aktif", 409);
-
-  const id = "sub_" + crypto.randomUUID().slice(0, 8);
-  const now = Date.now();
-  const monthMs = 30 * 24 * 60 * 60 * 1000;
-  await createSubscription(DB, {
-    id,
-    userId,
-    planId,
-    startsAt: now,
-    endsAt: now + monthMs,
-  });
-
-  // Generate invoice pertama
-  await createInvoice(DB, {
-    id: "inv_" + crypto.randomUUID().slice(0, 8),
-    userId,
-    subscriptionId: id,
-    amount: body?.amount ?? 0,
-    periodStart: now,
-    periodEnd: now + monthMs,
-  });
-
-  return c.json({ success: true, data: { id } });
-}
+// ── Subscriptions (admin) ───────────────────────────
 
 export async function listSubscriptionsCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
@@ -167,7 +110,7 @@ export async function cancelSubscriptionCtl(c: Context<AppEnv>) {
   return c.json({ success: true });
 }
 
-// ── Invoices ───────────────────────────────────────
+// ── Invoices (admin) ────────────────────────────────
 
 export async function listInvoicesCtl(c: Context<AppEnv>) {
   const DB = getDb(c);

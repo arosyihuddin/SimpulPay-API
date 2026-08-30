@@ -9,10 +9,17 @@ import {
 import { getDb, type Db } from "../db/client";
 import { getUserById } from "../db/repositories/user.repository";
 import { fail } from "./errorHandler";
+import { cookieToken } from "../utils/auth.helper";
 import type { AppEnv } from "../types";
 
 export const ADMIN_COOKIE = "gopay_admin_session";
 export const ADMIN_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Set adminToken dari cookie — dipakai dua router (customer + admin). */
+export const cookieAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
+  c.set("adminToken", cookieToken(c));
+  await next();
+};
 
 export function extractApiKey(c: Context<AppEnv>): string | null {
   const auth = c.req.header("authorization");
@@ -38,8 +45,8 @@ export async function apiKeyOk(DB: Db, key: string | null): Promise<string | nul
   return row.user_id;
 }
 
-/** Return userId jika sesi admin valid, else null. */
-export async function adminOk(
+/** Return userId jika sesi valid, else null. */
+async function sessionOk(
   DB: Db,
   token: string | null | undefined,
 ): Promise<string | null> {
@@ -58,9 +65,20 @@ export const apiKeyGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
 };
 
+/** Sesi valid + WAJIB role admin. Buat route /admin/*. */
 export const adminGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const token = c.get("adminToken");
-  const userId = await adminOk(getDb(c), token);
+  const userId = await sessionOk(getDb(c), c.get("adminToken"));
+  if (!userId) fail(401, "Tidak terautentikasi atau sesi berakhir");
+  const user = await getUserById(getDb(c), userId);
+  if (!user || user.role !== "admin")
+    fail(403, "Akses ditolak: hanya untuk admin");
+  c.set("userId", userId);
+  await next();
+};
+
+/** Sesi valid aja (role apa pun — admin juga boleh). Buat route customer. */
+export const customerGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const userId = await sessionOk(getDb(c), c.get("adminToken"));
   if (!userId) fail(401, "Tidak terautentikasi atau sesi berakhir");
   c.set("userId", userId);
   await next();

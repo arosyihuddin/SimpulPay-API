@@ -2,8 +2,9 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
 import { publicRoutes } from "./routes/public";
-import { adminRoutes } from "./routes/admin";
+import { adminRoutes, adminPublicRoutes } from "./routes/admin";
 import { v1Routes } from "./routes/v1";
+import { customerRoutes } from "./routes/customer";
 import {
   cleanOldClaims,
   cleanExpiredSessions,
@@ -51,7 +52,9 @@ app.use(
 );
 
 app.route("/", publicRoutes);
+app.route("/", customerRoutes);
 app.route("/api/v1", v1Routes);
+app.route("/admin", adminPublicRoutes);
 app.route("/admin", adminRoutes);
 
 app.doc("/docs/json", {

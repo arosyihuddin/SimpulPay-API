@@ -1,130 +1,54 @@
 import { Hono } from "hono";
-import type { MiddlewareHandler } from "hono";
-import { adminGuard, merchantGuard } from "../middleware/guards";
+import { adminGuard, cookieAuth } from "../middleware/guards";
 import type { AppEnv } from "../types";
-import { cookieToken } from "../utils/auth.helper";
 import {
   setupStatus,
   setup,
-  login,
-  logout,
-  changePassword,
-  me,
-  dashboard,
-  createQris,
-  listQris,
-  listTransactions,
-  listLogs,
-  settings,
-  createApiKeyCtl,
-  listApiKeysCtl,
-  deleteApiKeyCtl,
-  qrisParse,
-  qrisStatic,
-  merchantId,
-  otpRequest,
-  otpVerify,
-  refreshSessionCtl,
-  deleteGoBizCtl,
   listUsersCtl,
   createUserCtl,
   updateUserCtl,
   deleteUserCtl,
-  createMerchantCtl,
-  listMerchantsCtl,
-  updateMerchantCtl,
-  deleteMerchantCtl,
-  listNotificationsCtl,
-  markNotificationReadCtl,
-  createAnnouncementCtl,
-  listAnnouncementsCtl,
-  getAnnouncementCtl,
-  updateAnnouncementCtl,
-  deleteAnnouncementCtl,
-  createPlanCtl,
-  listPlansCtl,
-  getPlanCtl,
-  updatePlanCtl,
-  deletePlanCtl,
-  createSubscriptionCtl,
-  listSubscriptionsCtl,
-  getSubscriptionCtl,
-  cancelSubscriptionCtl,
-  listInvoicesCtl,
-  getInvoiceCtl,
-  markInvoicePaidCtl,
-} from "../controllers/admin";
-
-const adminAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  c.set("adminToken", cookieToken(c));
-  await next();
-};
+} from "../controllers/admin/auth";
+import { listLogs } from "../controllers/admin/dashboard";
+import { createPlanCtl, updatePlanCtl, deletePlanCtl, listSubscriptionsCtl, getSubscriptionCtl, cancelSubscriptionCtl, listInvoicesCtl, getInvoiceCtl, markInvoicePaidCtl } from "../controllers/admin/billing";
+import { createAnnouncementCtl, updateAnnouncementCtl, deleteAnnouncementCtl } from "../controllers/admin/announcements";
+import { changePassword } from "../controllers/customer/auth";
+import { listAnnouncementsCtl, getAnnouncementCtl } from "../controllers/customer/announcements";
+import { listPlansCtl, getPlanCtl } from "../controllers/customer/billing";
 
 // Admin gak masuk spec OpenAPI (swagger cuma untuk API v1) — pakai Hono biasa.
+const adminPublicRoutes = new Hono<AppEnv>();
+
+// Setup bootstrap — open, gak kena guard (bikin admin pertama, pre-auth)
+adminPublicRoutes.get("/setup-status", setupStatus);
+adminPublicRoutes.post("/setup", setup);
+
 const adminRoutes = new Hono<AppEnv>();
 
-// Open (tanpa adminGuard)
-adminRoutes.get("/setup-status", setupStatus);
-adminRoutes.post("/setup", setup);
-adminRoutes.post("/login", login);
-adminRoutes.post("/logout", logout);
+// Di bawah ini butuh cookie session + role admin
+adminRoutes.use("*", cookieAuth, adminGuard);
 
-// Di bawah ini butuh cookie session
-adminRoutes.use("*", adminAuth, adminGuard);
-
-adminRoutes.get("/me", me);
 adminRoutes.post("/change-password", changePassword);
 
-// Dashboard: butuh merchant (query/header)
-adminRoutes.get("/dashboard", merchantGuard, dashboard);
-adminRoutes.post("/qris", merchantGuard, createQris);
-adminRoutes.get("/qris", merchantGuard, listQris);
-adminRoutes.get("/transactions", merchantGuard, listTransactions);
 adminRoutes.get("/logs", listLogs);
 adminRoutes.get("/users", listUsersCtl);
 adminRoutes.post("/users", createUserCtl);
 adminRoutes.patch("/users/{id}", updateUserCtl);
 adminRoutes.delete("/users/{id}", deleteUserCtl);
 
-// Merchant CRUD (tanpa merchantGuard — create/read/list pake userId)
-adminRoutes.post("/merchants", createMerchantCtl);
-adminRoutes.get("/merchants", listMerchantsCtl);
-adminRoutes.patch("/merchants/{id}", merchantGuard, updateMerchantCtl);
-adminRoutes.delete("/merchants/{id}", merchantGuard, deleteMerchantCtl);
-
-// API keys
-adminRoutes.post("/api-keys", createApiKeyCtl);
-adminRoutes.get("/api-keys", listApiKeysCtl);
-adminRoutes.delete("/api-keys/{id}", deleteApiKeyCtl);
-
-// Notifications
-adminRoutes.get("/notifications", listNotificationsCtl);
-adminRoutes.post("/notifications/{id}/read", markNotificationReadCtl);
-
-// Announcements (broadcast admin ke semua user)
+// Announcements (admin write; read di customer routes)
 adminRoutes.post("/announcements", createAnnouncementCtl);
 adminRoutes.get("/announcements", listAnnouncementsCtl);
 adminRoutes.get("/announcements/{id}", getAnnouncementCtl);
 adminRoutes.patch("/announcements/{id}", updateAnnouncementCtl);
 adminRoutes.delete("/announcements/{id}", deleteAnnouncementCtl);
 
-// Settings
-adminRoutes.get("/settings", merchantGuard, settings);
-adminRoutes.post("/qris-parse", qrisParse);
-adminRoutes.post("/qris-static", merchantGuard, qrisStatic);
-adminRoutes.post("/merchant-id", merchantGuard, merchantId);
-adminRoutes.post("/otp-request", otpRequest);
-adminRoutes.post("/otp-verify", merchantGuard, otpVerify);
-adminRoutes.post("/refresh-session", merchantGuard, refreshSessionCtl);
-adminRoutes.delete("/gobiz-session", merchantGuard, deleteGoBizCtl);
-
-// Billing: plans, subscriptions, invoices
+// Billing: admin write plans + subscriptions/invoices admin
 adminRoutes.post("/plans", createPlanCtl);
 adminRoutes.get("/plans", listPlansCtl);
 adminRoutes.get("/plans/{id}", getPlanCtl);
 adminRoutes.patch("/plans/{id}", updatePlanCtl);
 adminRoutes.delete("/plans/{id}", deletePlanCtl);
-adminRoutes.post("/subscriptions", createSubscriptionCtl);
 adminRoutes.get("/subscriptions", listSubscriptionsCtl);
 adminRoutes.get("/subscriptions/{id}", getSubscriptionCtl);
 adminRoutes.post("/subscriptions/{id}/cancel", cancelSubscriptionCtl);
@@ -132,4 +56,4 @@ adminRoutes.get("/invoices", listInvoicesCtl);
 adminRoutes.get("/invoices/{id}", getInvoiceCtl);
 adminRoutes.post("/invoices/{id}/paid", markInvoicePaidCtl);
 
-export { adminRoutes };
+export { adminPublicRoutes, adminRoutes };
