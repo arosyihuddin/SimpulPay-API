@@ -1,4 +1,4 @@
-import { eq, and, lt, desc, sql } from "drizzle-orm";
+import { eq, and, lt, gte, lte, desc, sql } from "drizzle-orm";
 import { transactions, merchants } from "../schema";
 import type { Db } from "../client";
 
@@ -80,6 +80,22 @@ export async function markTransactionPaid(db: Db, id: string, transactionJson: s
     .update(transactions)
     .set({ status: "PAID", transaction_json: transactionJson })
     .where(eq(transactions.id, id));
+}
+
+export async function paidTransactionsInRange(
+  db: Db,
+  opts: { from: number; to: number; merchantId?: string },
+): Promise<Array<{ amount: number; created_at: number }>> {
+  const conds = [
+    eq(transactions.status, "PAID"),
+    gte(transactions.created_at, opts.from),
+    lte(transactions.created_at, opts.to),
+  ];
+  if (opts.merchantId) conds.push(eq(transactions.merchant_id, opts.merchantId));
+  return db
+    .select({ amount: transactions.amount, created_at: transactions.created_at })
+    .from(transactions)
+    .where(and(...conds));
 }
 
 export async function markTransactionsExpired(db: Db, now = Date.now(), merchantId?: string) {

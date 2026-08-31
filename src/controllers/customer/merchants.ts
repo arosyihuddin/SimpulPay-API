@@ -97,6 +97,23 @@ export async function listMerchantsCtl(c: Context<AppEnv>) {
   });
 }
 
+/** Ringkasan merchant: hanya id + nama + status — untuk widget dashboard. */
+export async function merchantSummary(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  const merchants = await listMerchantsByUser(DB, userId);
+  return c.json({
+    success: true,
+    data: {
+      merchants: merchants.map((m) => ({
+        id: m.id,
+        name: m.name,
+        status: m.status,
+      })),
+    },
+  });
+}
+
 export async function updateMerchantCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);

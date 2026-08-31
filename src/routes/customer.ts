@@ -9,6 +9,8 @@ import {
   createQris,
   listTransactions,
   getTransactionCode,
+  recentTransactions,
+  transactionVolume,
   merchantTransactions,
   settings,
   createApiKeyCtl,
@@ -21,6 +23,7 @@ import {
   deleteGoBizCtl,
   createMerchantCtl,
   listMerchantsCtl,
+  merchantSummary,
   updateMerchantCtl,
   deleteMerchantCtl,
   setMerchantStatusCtl,
@@ -47,11 +50,14 @@ customerRoutes.get("/dashboard", ...customerAuth, dashboard);
 customerRoutes.get("/logs", ...customerAuth, listLogsCtl);
 customerRoutes.post("/qris", ...customerAuth, merchantGuard, createQris);
 customerRoutes.get("/transactions", ...customerAuth, listTransactions);
+customerRoutes.get("/transactions/recent", ...customerAuth, recentTransactions);
+customerRoutes.get("/transactions/volume", ...customerAuth, transactionVolume);
 customerRoutes.get("/transactions/:id/code", ...customerAuth, getTransactionCode);
 
 // Merchants
 customerRoutes.post("/merchants", ...customerAuth, createMerchantCtl);
 customerRoutes.get("/merchants", ...customerAuth, listMerchantsCtl);
+customerRoutes.get("/merchants/summary", ...customerAuth, merchantSummary);
 customerRoutes.patch("/merchants/:id", ...customerAuth, updateMerchantCtl);
 customerRoutes.delete("/merchants/:id", ...customerAuth, deleteMerchantCtl);
 customerRoutes.patch(

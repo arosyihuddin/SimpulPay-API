@@ -6,6 +6,7 @@ import {
   getTransaction,
   insertTransaction,
   insertLog,
+  paidTransactionsInRange,
 } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
@@ -135,5 +136,98 @@ export async function getTransactionCode(c: Context<AppEnv>) {
   return c.json({
     success: true,
     data: { code: tx.code, status: tx.status },
+  });
+}
+
+/** Transaksi terbaru (limit kecil) — dipakai widget "Transaksi Terbaru" dashboard. */
+export async function recentTransactions(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  const q = c.req.query();
+  const limit = Math.min(
+    parseInt((q.limit as string) || "5", 10),
+    20,
+  );
+  const merchantId = (q.merchant_id as string) || undefined;
+  if (merchantId) {
+    const m = await getMerchant(DB, merchantId);
+    if (!m || m.user_id !== userId) bad("Merchant tidak ditemukan", 404);
+  }
+  const rows = await queryTransactions(DB, { limit, merchantId });
+  const txns = rows.map((t) => ({
+    id: t.id,
+    trx_id: t.trx_id,
+    merchant_id: t.merchant_id,
+    merchant_name: t.merchant_name,
+    amount: t.amount,
+    status: t.status,
+    created_at: t.created_at,
+  }));
+  return c.json({ success: true, data: { transactions: txns } });
+}
+
+/**
+ * Volume transaksi PAID per bucket untuk chart.
+ * range=7|30 → per hari (label "d MMM"), range=today → per jam (label "HH:mm").
+ */
+export async function transactionVolume(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  const q = c.req.query();
+  const range = (q.range as string) || "7";
+  const merchantId = (q.merchant_id as string) || undefined;
+  if (merchantId) {
+    const m = await getMerchant(DB, merchantId);
+    if (!m || m.user_id !== userId) bad("Merchant tidak ditemukan", 404);
+  }
+
+  const now = Date.now();
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
+
+  let buckets: { label: string; from: number; to: number }[];
+  if (range === "today") {
+    buckets = [];
+    for (let h = 0; h < 24; h += 4) {
+      buckets.push({
+        label: `${String(h).padStart(2, "0")}:00`,
+        from: startOfDay.getTime() + h * 3600_000,
+        to: startOfDay.getTime() + (h + 4) * 3600_000 - 1,
+      });
+    }
+  } else {
+    const days = range === "30" ? 30 : 7;
+    buckets = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(startOfDay);
+      d.setDate(d.getDate() - i);
+      const next = new Date(d);
+      next.setDate(next.getDate() + 1);
+      buckets.push({
+        label: d.toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+        from: d.getTime(),
+        to: next.getTime() - 1,
+      });
+    }
+  }
+
+  const from = buckets[0].from;
+  const to = buckets[buckets.length - 1].to;
+  const paid = await paidTransactionsInRange(DB, { from, to, merchantId });
+
+  const data = buckets.map(
+    (b) =>
+      paid
+        .filter((t) => t.created_at >= b.from && t.created_at <= b.to)
+        .reduce((s, t) => s + t.amount, 0) / 100,
+  );
+
+  return c.json({
+    success: true,
+    data: {
+      labels: buckets.map((b) => b.label),
+      data,
+      total: data.reduce((s, v) => s + v, 0),
+    },
   });
 }
