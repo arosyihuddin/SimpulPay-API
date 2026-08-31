@@ -8,6 +8,7 @@ import {
   getActiveSubscription,
   createSubscription,
   createInvoice,
+  listInvoices,
 } from "../../db/repositories";
 
 export async function listPlansCtl(c: Context<AppEnv>) {
@@ -23,6 +24,65 @@ export async function getPlanCtl(c: Context<AppEnv>) {
   const plan = await getPlan(DB, id);
   if (!plan) bad("Plan tidak ditemukan", 404);
   return c.json({ success: true, data: plan });
+}
+
+export async function getMySubscriptionCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  if (c.get("role") === "admin") {
+    return c.json({
+      success: true,
+      data: {
+        subscription: {
+          id: "sub_admin",
+          plan_id: "plan_admin",
+          plan_name: "Admin",
+          status: "active",
+          starts_at: null,
+          ends_at: null,
+          created_at: null,
+        },
+      },
+    });
+  }
+  const sub = await getActiveSubscription(DB, userId);
+  if (!sub) return c.json({ success: true, data: { subscription: null } });
+  const plan = await getPlan(DB, sub.plan_id);
+  return c.json({
+    success: true,
+    data: {
+      subscription: {
+        id: sub.id,
+        plan_id: sub.plan_id,
+        plan_name: plan?.name ?? null,
+        status: sub.status,
+        starts_at: sub.starts_at,
+        ends_at: sub.ends_at,
+        created_at: sub.created_at,
+      },
+    },
+  });
+}
+
+export async function listMyInvoicesCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  const invoices = await listInvoices(DB, { userId });
+  return c.json({
+    success: true,
+    data: {
+      invoices: invoices.map((i) => ({
+        id: i.id,
+        subscription_id: i.subscription_id,
+        amount: i.amount,
+        status: i.status,
+        period_start: i.period_start,
+        period_end: i.period_end,
+        paid_at: i.paid_at,
+        created_at: i.created_at,
+      })),
+    },
+  });
 }
 
 export async function createSubscriptionCtl(c: Context<AppEnv>) {

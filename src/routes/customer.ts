@@ -32,7 +32,9 @@ import {
   getAnnouncementCtl,
   listPlansCtl,
   getPlanCtl,
+  getMySubscriptionCtl,
   createSubscriptionCtl,
+  listMyInvoicesCtl,
 } from "../controllers/customer";
 
 // Customer gak masuk spec OpenAPI (swagger cuma untuk API v1) — pakai Hono biasa.
@@ -96,7 +98,9 @@ customerRoutes.get("/settings", ...customerAuth, merchantGuard, settings);
 // Billing: customer baca plan, self-service subscribe
 customerRoutes.get("/plans", ...customerAuth, listPlansCtl);
 customerRoutes.get("/plans/:id", ...customerAuth, getPlanCtl);
+customerRoutes.get("/subscriptions", ...customerAuth, getMySubscriptionCtl);
 customerRoutes.post("/subscriptions", ...customerAuth, createSubscriptionCtl);
+customerRoutes.get("/invoices", ...customerAuth, listMyInvoicesCtl);
 
 // Announcements: baca broadcast
 customerRoutes.get("/announcements", ...customerAuth, listAnnouncementsCtl);
