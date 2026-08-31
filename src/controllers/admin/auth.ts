@@ -1,10 +1,7 @@
-import { ADMIN_TTL_MS } from "../../middleware/guards";
 import { hashPassword } from "../../utils/auth.helper";
 import {
   insertLog,
-  createAdminSession,
   getAdminSession,
-  createMerchant,
 } from "../../db/repositories";
 import {
   listUsers,
@@ -25,45 +22,7 @@ import {
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { Db, getDb } from "../../db/client";
-import { bad, cookieHeader, SESSION_MAX_AGE } from "./helpers";
-
-export async function setupStatus(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const needsSetup = (await countUsers(DB)) === 0;
-  return c.json({ needsSetup, configDone: true });
-}
-
-export async function setup(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const body = await c.req.json();
-  if ((await countUsers(DB)) > 0)
-    bad("Setup sudah selesai. Logout lalu login.", 409);
-  const username = (body?.username || "").trim();
-  const password = body?.password || "";
-  if (username.length < 3) bad("Username minimal 3 karakter");
-  if (password.length < 8) bad("Password minimal 8 karakter");
-  const id = crypto.randomUUID();
-  await createUser(DB, {
-    id,
-    username,
-    passwordHash: await hashPassword(password),
-    role: "admin",
-  });
-  await createMerchant(DB, {
-    id: "m_" + id.slice(0, 8),
-    userId: id,
-    name: "Merchant " + username,
-  });
-  const token = crypto.randomUUID();
-  await createAdminSession(DB, token, ADMIN_TTL_MS, id);
-  await insertLog(
-    DB,
-    "INFO",
-    "Setup selesai: admin '" + username + "' dibuat. Login sukses.",
-  );
-  c.header("Set-Cookie", cookieHeader(token, SESSION_MAX_AGE));
-  return c.json({ success: true });
-}
+import { bad } from "./helpers";
 
 async function userBillingInfo(DB: Db, userId: string) {
   const sub = await getActiveSubscription(DB, userId);

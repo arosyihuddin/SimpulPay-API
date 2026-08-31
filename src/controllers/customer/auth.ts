@@ -10,7 +10,6 @@ import {
   getUserById,
   getUserByUsername,
   updateUserPassword,
-  countUsers,
 } from "../../db/repositories/user.repository";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
@@ -54,7 +53,6 @@ export async function me(c: Context<AppEnv>) {
   const DB = getDb(c);
   const token = c.get("adminToken") as string;
   const s = await getAdminSession(DB, token);
-  const userCount = await countUsers(DB);
   let role = "admin";
   let username = null;
   let status = "active";
@@ -70,7 +68,6 @@ export async function me(c: Context<AppEnv>) {
     success: true,
     data: {
       session_expires_at: s?.expires_at ?? null,
-      setup_done: userCount > 0,
       role,
       username,
       status,

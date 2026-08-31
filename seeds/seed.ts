@@ -13,6 +13,11 @@ import {
   updatePlan,
 } from "../src/db/repositories/billing.repository";
 import { setSetting } from "../src/db/repositories/settings.repository";
+import {
+  getUserByUsername,
+  createUser,
+} from "../src/db/repositories/user.repository";
+import { hashPassword } from "../src/utils/auth.helper";
 
 const cs =
   process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE ??
@@ -75,6 +80,22 @@ const settings: Record<string, string> = {
 for (const [k, v] of Object.entries(settings)) {
   await setSetting(db, k, v);
   console.log(`setting ${k} = ${v}`);
+}
+
+// ── Admin user (pengganti setup) ─────────────────────
+const adminUsername = process.env.ADMIN_USERNAME || "admin";
+const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+const existingAdmin = await getUserByUsername(db, adminUsername);
+if (!existingAdmin) {
+  await createUser(db, {
+    id: crypto.randomUUID(),
+    username: adminUsername,
+    passwordHash: await hashPassword(adminPassword),
+    role: "admin",
+  });
+  console.log(`admin '${adminUsername}' dibuat`);
+} else {
+  console.log(`admin '${adminUsername}' sudah ada`);
 }
 
 await client.end();
