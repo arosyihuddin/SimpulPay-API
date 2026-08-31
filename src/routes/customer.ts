@@ -14,8 +14,6 @@ import {
   listApiKeysCtl,
   deleteApiKeyCtl,
   qrisParse,
-  qrisStatic,
-  merchantId,
   otpRequest,
   otpVerify,
   refreshSessionCtl,
@@ -48,67 +46,41 @@ customerRoutes.get("/logs", ...customerAuth, listLogsCtl);
 customerRoutes.post("/qris", ...customerAuth, merchantGuard, createQris);
 customerRoutes.get("/transactions", ...customerAuth, listTransactions);
 
+// Merchants
 customerRoutes.post("/merchants", ...customerAuth, createMerchantCtl);
 customerRoutes.get("/merchants", ...customerAuth, listMerchantsCtl);
-customerRoutes.patch(
-  "/merchants/{id}",
-  ...customerAuth,
-  merchantGuard,
-  updateMerchantCtl,
-);
-customerRoutes.delete(
-  "/merchants/{id}",
-  ...customerAuth,
-  merchantGuard,
-  deleteMerchantCtl,
-);
-customerRoutes.get(
-  "/merchants/{id}",
-  ...customerAuth,
-  merchantGuard,
-  merchantTransactions,
-);
+customerRoutes.patch("/merchants/:id", ...customerAuth, updateMerchantCtl);
+customerRoutes.delete("/merchants/:id", ...customerAuth, deleteMerchantCtl);
+customerRoutes.get("/merchants/:id", ...customerAuth, merchantTransactions);
+customerRoutes.post("/qris-parse", ...customerAuth, qrisParse);
+customerRoutes.post("/otp-request/:id", ...customerAuth, otpRequest);
+customerRoutes.post("/otp-verify/:id", ...customerAuth, otpVerify);
+customerRoutes.post("/refresh-session/:id", ...customerAuth, refreshSessionCtl);
+customerRoutes.delete("/gobiz-session/:id", ...customerAuth, deleteGoBizCtl);
 
 // API keys
 customerRoutes.post("/api-keys", ...customerAuth, createApiKeyCtl);
 customerRoutes.get("/api-keys", ...customerAuth, listApiKeysCtl);
-customerRoutes.delete("/api-keys/{id}", ...customerAuth, deleteApiKeyCtl);
+customerRoutes.delete("/api-keys/:id", ...customerAuth, deleteApiKeyCtl);
 
 // Notifications
 customerRoutes.get("/notifications", ...customerAuth, listNotificationsCtl);
 customerRoutes.post(
-  "/notifications/{id}/read",
+  "/notifications/:id/read",
   ...customerAuth,
   markNotificationReadCtl,
 );
 
 // Settings
 customerRoutes.get("/settings", ...customerAuth, merchantGuard, settings);
-customerRoutes.post("/qris-parse", ...customerAuth, qrisParse);
-customerRoutes.post("/qris-static", ...customerAuth, merchantGuard, qrisStatic);
-customerRoutes.post("/merchant-id", ...customerAuth, merchantGuard, merchantId);
-customerRoutes.post("/otp-request", ...customerAuth, otpRequest);
-customerRoutes.post("/otp-verify", ...customerAuth, merchantGuard, otpVerify);
-customerRoutes.post(
-  "/refresh-session",
-  ...customerAuth,
-  merchantGuard,
-  refreshSessionCtl,
-);
-customerRoutes.delete(
-  "/gobiz-session",
-  ...customerAuth,
-  merchantGuard,
-  deleteGoBizCtl,
-);
 
 // Billing: customer baca plan, self-service subscribe
 customerRoutes.get("/plans", ...customerAuth, listPlansCtl);
-customerRoutes.get("/plans/{id}", ...customerAuth, getPlanCtl);
+customerRoutes.get("/plans/:id", ...customerAuth, getPlanCtl);
 customerRoutes.post("/subscriptions", ...customerAuth, createSubscriptionCtl);
 
 // Announcements: baca broadcast
 customerRoutes.get("/announcements", ...customerAuth, listAnnouncementsCtl);
-customerRoutes.get("/announcements/{id}", ...customerAuth, getAnnouncementCtl);
+customerRoutes.get("/announcements/:id", ...customerAuth, getAnnouncementCtl);
 
 export { customerRoutes };

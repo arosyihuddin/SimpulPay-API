@@ -16,7 +16,7 @@ publicRoutes.get("/api/health", apiHealth);
 
 publicRoutes.get("/docs", swaggerUI({ url: "/docs/json" }));
 
-publicRoutes.get("/qr/{id}", qrPage);
-publicRoutes.get("/api/qr-status/{id}", qrStatus);
+publicRoutes.get("/qr/:id", qrPage);
+publicRoutes.get("/api/qr-status/:id", qrStatus);
 
 export { publicRoutes };

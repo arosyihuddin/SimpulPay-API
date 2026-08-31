@@ -13,10 +13,6 @@ export async function setQrisStatic(DB: Db, merchantId: string, code: string): P
 export async function getMerchantId(DB: Db, merchantId: string): Promise<string> {
   return (await getMerchant(DB, merchantId))?.gopay_merchant_id || '';
 }
-export async function setMerchantId(DB: Db, merchantId: string, id: string): Promise<void> {
-  await updateMerchant(DB, merchantId, { gopayMerchantId: id });
-}
-
 export function parseQrisTlv(payload: string): Record<string, string> {
   const out: Record<string, string> = {};
   let i = 0;
