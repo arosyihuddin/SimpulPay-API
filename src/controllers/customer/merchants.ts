@@ -17,7 +17,7 @@ import {
   normalizePhone,
 } from "../../services/gobizAuth";
 import { loadSession, refreshSession } from "../../services/sessionManager";
-import { parseQrisTlv, setQrisStatic } from "../../services/qris";
+import { parseQrisTlv } from "../../services/qris";
 import { decodeQRCodeFromImage } from "../../services/qrDecoder";
 import { formatTransaction } from "../../services/gojek";
 import type { Context } from "hono";
@@ -203,8 +203,14 @@ export async function qrisParse(c: Context<AppEnv>) {
   const sub = parseQrisTlv(merchantInfo);
   const gopayId =
     Object.values(sub).find((v) => /^G\d{9}$/.test(v)) || merchantInfo;
-  if (/^G\d{9}$/.test(gopayId) && merchant.gopay_merchant_id === gopayId) {
-    await setQrisStatic(DB, merchant.id, decoded);
+  if (/^G\d{9}$/.test(gopayId)) {
+    // Simpan QRIS static + auto-set gopay_merchant_id kalau belum ada.
+    const patch: { qrisStatic: string; gopayMerchantId?: string } = {
+      qrisStatic: decoded,
+    };
+    if (merchant.gopay_merchant_id !== gopayId)
+      patch.gopayMerchantId = gopayId;
+    await updateMerchant(DB, merchant.id, patch);
     await insertLog(
       DB,
       "INFO",
