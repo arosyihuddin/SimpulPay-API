@@ -27,7 +27,7 @@ export async function createMerchant(
     user_id: m.userId,
     type: m.type ?? "gopay",
     name: m.name,
-    gopay_merchant_id: m.gopayMerchantId ?? null,
+    merchant_id: m.gopayMerchantId ?? null,
     qris_static: m.qrisStatic ?? null,
     config_json: null,
     status: "active",
@@ -78,7 +78,7 @@ export async function getMerchantByUser(
   return rows[0] ?? null;
 }
 
-/** Cari merchant milik user berdasarkan gopay_merchant_id (G9...) — dipakai resolve dari hasil parse QRIS. */
+/** Cari merchant milik user berdasarkan merchant_id (G9...) — dipakai resolve dari hasil parse QRIS. */
 export async function getMerchantByGopayId(
   db: Db,
   userId: string,
@@ -90,7 +90,7 @@ export async function getMerchantByGopayId(
     .where(
       and(
         eq(merchants.user_id, userId),
-        eq(merchants.gopay_merchant_id, gopayId),
+        eq(merchants.merchant_id, gopayId),
       ),
     )
     .limit(1);
@@ -114,7 +114,7 @@ export async function updateMerchant(
   if (u.name !== undefined) sets.name = u.name;
   if (u.type !== undefined) sets.type = u.type;
   if (u.gopayMerchantId !== undefined)
-    sets.gopay_merchant_id = u.gopayMerchantId;
+    sets.merchant_id = u.gopayMerchantId;
   if (u.qrisStatic !== undefined) sets.qris_static = u.qrisStatic;
   if (u.status !== undefined) sets.status = u.status;
   if (u.configJson !== undefined) sets.config_json = u.configJson;

@@ -24,12 +24,7 @@ import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import type { Db } from "../../db/client";
 import { getDb } from "../../db/client";
-import {
-  bad,
-  currentUserId,
-  paramId,
-  fetchMonthTransactions,
-} from "./helpers";
+import { bad, currentUserId, paramId, fetchMonthTransactions } from "./helpers";
 
 /** Ambil merchant milik user dari :id path, cek status aktif. */
 async function ownedActiveMerchant(DB: Db, userId: string, merchantId: string) {
@@ -93,7 +88,7 @@ export async function listMerchantsCtl(c: Context<AppEnv>) {
         type: m.type,
         name: m.name,
         status: m.status,
-        gopay_merchant_id: m.gopay_merchant_id,
+        merchant_id: m.merchant_id,
         qris_static_set: !!m.qris_static,
         created_at: m.created_at,
         updated_at: m.updated_at,
@@ -204,12 +199,10 @@ export async function qrisParse(c: Context<AppEnv>) {
   const gopayId =
     Object.values(sub).find((v) => /^G\d{9}$/.test(v)) || merchantInfo;
   if (/^G\d{9}$/.test(gopayId)) {
-    // Simpan QRIS static + auto-set gopay_merchant_id kalau belum ada.
     const patch: { qrisStatic: string; gopayMerchantId?: string } = {
       qrisStatic: decoded,
     };
-    if (merchant.gopay_merchant_id !== gopayId)
-      patch.gopayMerchantId = gopayId;
+    if (merchant.merchant_id !== gopayId) patch.gopayMerchantId = gopayId;
     await updateMerchant(DB, merchant.id, patch);
     await insertLog(
       DB,
@@ -231,7 +224,7 @@ export async function qrisParse(c: Context<AppEnv>) {
       merchant_name: tlv["59"],
       city: tlv["60"],
       type: tlv["01"] === "11" ? "static" : "dynamic",
-      matched: merchant.gopay_merchant_id === gopayId,
+      matched: merchant.merchant_id === gopayId,
     },
   });
 }
@@ -340,13 +333,16 @@ export async function merchantTransactions(c: Context<AppEnv>) {
   const userId = currentUserId(c);
   const merchantId = paramId(c);
   const merchant = await getMerchant(DB, merchantId);
-  if (!merchant || merchant.user_id !== userId) bad("Merchant tidak ditemukan", 404);
+  if (!merchant || merchant.user_id !== userId)
+    bad("Merchant tidak ditemukan", 404);
   const q = c.req.query();
   const tx = await fetchMonthTransactions(DB, merchantId);
   if (!tx.success) return c.json({ success: false, message: tx.message });
   const total = tx.raw.length;
   const pageSize = parseInt((q.pageSize as string) || "20", 10);
   const page = parseInt((q.page as string) || "1", 10);
-  const formatted = tx.raw.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize).map(formatTransaction);
+  const formatted = tx.raw
+    .slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize)
+    .map(formatTransaction);
   return c.json({ success: true, data: { transactions: formatted, total } });
 }

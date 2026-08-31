@@ -1,0 +1,1 @@
+ALTER TABLE "merchants" RENAME COLUMN "gopay_merchant_id" TO "merchant_id";

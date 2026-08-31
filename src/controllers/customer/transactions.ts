@@ -3,6 +3,7 @@ import {
   countTransactions,
   markTransactionsExpired,
   getMerchant,
+  getTransaction,
   insertTransaction,
   insertLog,
 } from "../../db/repositories";
@@ -25,24 +26,69 @@ export async function createQris(c: Context<AppEnv>) {
   const merchantId = reqMerchant(c);
   const body = await c.req.json();
   const amount = body?.amount;
-  if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) bad("Nominal pembayaran tidak valid");
+  if (!amount || isNaN(Number(amount)) || Number(amount) <= 0)
+    bad("Nominal pembayaran tidak valid");
   const staticTemplate = await getQrisStatic(DB, merchantId);
-  if (!staticTemplate) bad("QRIS static belum dikonfigurasi. Upload QRIS static di Settings → Konfigurasi QRIS.", 500);
+  if (!staticTemplate)
+    bad(
+      "QRIS static belum dikonfigurasi. Upload QRIS static di Settings → Konfigurasi QRIS.",
+      500,
+    );
   const blocked = await checkDailyPaidLimit(DB, merchantId);
-  if (blocked) bad(`Batas transaksi harian tercapai (${blocked.used}/${blocked.limit}). Silakan upgrade plan atau coba besok.`, 429);
+  if (blocked)
+    bad(
+      `Batas transaksi harian tercapai (${blocked.used}/${blocked.limit}). Silakan upgrade plan atau coba besok.`,
+      429,
+    );
   const base = parseInt(String(amount), 10);
   const { code, pay } = uniqueAmount(base);
   const dynamicCode = generateDynamicQRIS(staticTemplate, pay);
   const qrisId = Math.random().toString(36).substring(2, 10);
-  const trxId = "TRX-" + Math.random().toString(36).substring(2, 10).toUpperCase();
+  const trxId =
+    "TRX-" + Math.random().toString(36).substring(2, 10).toUpperCase();
   const now = Date.now();
   const expiresAt = now + qrisExpiryMs();
-  await insertTransaction(DB, { id: qrisId, code: dynamicCode!, amount: pay, baseAmount: base, uniqueCode: code, trxId, merchantId, createdAt: now, expiresAt });
-  await insertLog(DB, "INFO", "Admin buat QRIS | Merchant " + merchantId + " | TRX-ID: " + trxId + " | Rp " + base + " (+" + code + ")");
-  broadcast(c.env, { type: "qris_created", scope: "admin", data: { id: qrisId, merchantId, status: "PENDING" } });
+  await insertTransaction(DB, {
+    id: qrisId,
+    code: dynamicCode!,
+    amount: pay,
+    baseAmount: base,
+    uniqueCode: code,
+    trxId,
+    merchantId,
+    createdAt: now,
+    expiresAt,
+  });
+  await insertLog(
+    DB,
+    "INFO",
+    "Admin buat QRIS | Merchant " +
+      merchantId +
+      " | TRX-ID: " +
+      trxId +
+      " | Rp " +
+      base +
+      " (+" +
+      code +
+      ")",
+  );
+  broadcast(c.env, {
+    type: "qris_created",
+    scope: "admin",
+    data: { id: qrisId, merchantId, status: "PENDING" },
+  });
   return c.json({
     success: true,
-    data: { qris_id: qrisId, trx_id: trxId, qris_url: "/qr/" + qrisId, qris_code: dynamicCode, amount: base, unique_code: code, amount_to_pay: pay, expires_at: new Date(expiresAt).toISOString() },
+    data: {
+      qris_id: qrisId,
+      trx_id: trxId,
+      qris_url: "/qr/" + qrisId,
+      qris_code: dynamicCode,
+      amount: base,
+      unique_code: code,
+      amount_to_pay: pay,
+      expires_at: new Date(expiresAt).toISOString(),
+    },
   });
 }
 
@@ -67,6 +113,7 @@ export async function listTransactions(c: Context<AppEnv>) {
     id: t.id,
     trx_id: t.trx_id,
     merchant_id: t.merchant_id,
+    merchant_name: t.merchant_name,
     amount: t.amount,
     base_amount: t.base_amount,
     unique_code: t.unique_code,
@@ -75,4 +122,19 @@ export async function listTransactions(c: Context<AppEnv>) {
     expires_at: t.expires_at,
   }));
   return c.json({ success: true, data: { transactions: txns, total } });
+}
+
+/** Ambil QRIS code (string QR) dari transaksi tertentu. */
+export async function getTransactionCode(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  const id = c.req.param("id") ?? "";
+  const tx = await getTransaction(DB, id);
+  if (!tx || !tx.merchant_id) bad("Transaksi tidak ditemukan", 404);
+  const m = await getMerchant(DB, tx.merchant_id);
+  if (!m || m.user_id !== userId) bad("Akses ditolak", 403);
+  return c.json({
+    success: true,
+    data: { code: tx.code },
+  });
 }

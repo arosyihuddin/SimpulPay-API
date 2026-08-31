@@ -94,7 +94,7 @@ export const merchants = pgTable("merchants", {
     .references(() => users.id),
   type: merchantTypeEnum("type").notNull().default("gopay"),
   name: text("name").notNull(),
-  gopay_merchant_id: text("gopay_merchant_id"),
+  merchant_id: text("merchant_id"),
   qris_static: text("qris_static"),
   config_json: jsonb("config_json"),
   status: merchantStatusEnum("status").notNull().default("active"),

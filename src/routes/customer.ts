@@ -8,6 +8,7 @@ import {
   listLogsCtl,
   createQris,
   listTransactions,
+  getTransactionCode,
   merchantTransactions,
   settings,
   createApiKeyCtl,
@@ -46,6 +47,7 @@ customerRoutes.get("/dashboard", ...customerAuth, dashboard);
 customerRoutes.get("/logs", ...customerAuth, listLogsCtl);
 customerRoutes.post("/qris", ...customerAuth, merchantGuard, createQris);
 customerRoutes.get("/transactions", ...customerAuth, listTransactions);
+customerRoutes.get("/transactions/:id/code", ...customerAuth, getTransactionCode);
 
 // Merchants
 customerRoutes.post("/merchants", ...customerAuth, createMerchantCtl);

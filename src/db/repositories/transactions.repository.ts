@@ -1,5 +1,5 @@
 import { eq, and, lt, desc, sql } from "drizzle-orm";
-import { transactions } from "../schema";
+import { transactions, merchants } from "../schema";
 import type { Db } from "../client";
 
 export type TransactionRow = typeof transactions.$inferSelect;
@@ -37,21 +37,27 @@ export async function getTransaction(db: Db, id: string): Promise<TransactionRow
   return rows[0] ?? null;
 }
 
+export type TransactionWithMerchant = TransactionRow & {
+  merchant_name: string | null;
+};
+
 export async function queryTransactions(
   db: Db,
   opts: { limit?: number; offset?: number; merchantId?: string; status?: string } = {},
-): Promise<TransactionRow[]> {
+): Promise<TransactionWithMerchant[]> {
   const { limit = 50, offset = 0, merchantId, status } = opts;
   const conds = [];
   if (merchantId) conds.push(eq(transactions.merchant_id, merchantId));
   if (status) conds.push(eq(transactions.status, status));
-  return db
-    .select()
+  const rows = await db
+    .select({ t: transactions, m: merchants })
     .from(transactions)
+    .leftJoin(merchants, eq(transactions.merchant_id, merchants.id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(transactions.created_at))
     .limit(limit)
     .offset(offset);
+  return rows.map(({ t, m }) => ({ ...t, merchant_name: m?.name ?? null }));
 }
 
 export async function countTransactions(

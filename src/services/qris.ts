@@ -11,7 +11,7 @@ export async function setQrisStatic(DB: Db, merchantId: string, code: string): P
   await updateMerchant(DB, merchantId, { qrisStatic: code });
 }
 export async function getMerchantId(DB: Db, merchantId: string): Promise<string> {
-  return (await getMerchant(DB, merchantId))?.gopay_merchant_id || '';
+  return (await getMerchant(DB, merchantId))?.merchant_id || '';
 }
 export function parseQrisTlv(payload: string): Record<string, string> {
   const out: Record<string, string> = {};
