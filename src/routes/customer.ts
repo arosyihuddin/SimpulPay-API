@@ -22,6 +22,7 @@ import {
   listMerchantsCtl,
   updateMerchantCtl,
   deleteMerchantCtl,
+  setMerchantStatusCtl,
   listNotificationsCtl,
   markNotificationReadCtl,
   listAnnouncementsCtl,
@@ -51,12 +52,25 @@ customerRoutes.post("/merchants", ...customerAuth, createMerchantCtl);
 customerRoutes.get("/merchants", ...customerAuth, listMerchantsCtl);
 customerRoutes.patch("/merchants/:id", ...customerAuth, updateMerchantCtl);
 customerRoutes.delete("/merchants/:id", ...customerAuth, deleteMerchantCtl);
-customerRoutes.get("/merchants/:id", ...customerAuth, merchantTransactions);
-customerRoutes.post("/qris-parse", ...customerAuth, qrisParse);
-customerRoutes.post("/otp-request/:id", ...customerAuth, otpRequest);
-customerRoutes.post("/otp-verify/:id", ...customerAuth, otpVerify);
-customerRoutes.post("/refresh-session/:id", ...customerAuth, refreshSessionCtl);
-customerRoutes.delete("/gobiz-session/:id", ...customerAuth, deleteGoBizCtl);
+customerRoutes.patch(
+  "/merchants/:id/status",
+  ...customerAuth,
+  setMerchantStatusCtl,
+);
+customerRoutes.get(
+  "/merchants/:id/transactions",
+  ...customerAuth,
+  merchantTransactions,
+);
+customerRoutes.post("/merchants/:id/qris-parse", ...customerAuth, qrisParse);
+customerRoutes.post("/merchants/:id/otp-request", ...customerAuth, otpRequest);
+customerRoutes.post("/merchants/:id/otp-verify", ...customerAuth, otpVerify);
+customerRoutes.post(
+  "/merchants/:id/refresh",
+  ...customerAuth,
+  refreshSessionCtl,
+);
+customerRoutes.delete("/merchants/:id/clean", ...customerAuth, deleteGoBizCtl);
 
 // API keys
 customerRoutes.post("/api-keys", ...customerAuth, createApiKeyCtl);

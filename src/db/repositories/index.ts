@@ -5,7 +5,6 @@ export * from "./claims.repository";
 export * from "./logs.repository";
 export * from "./settings.repository";
 export * from "./adminSessions.repository";
-export * from "./gobizSessions.repository";
 export * from "./merchants.repository";
 export * from "./apiKeys.repository";
 export * from "./notifications.repository";

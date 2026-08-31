@@ -6,6 +6,7 @@ import {
   bigserial,
   boolean,
   pgEnum,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "customer"]);
@@ -76,14 +77,6 @@ export const adminSessions = pgTable("admin_sessions", {
   expires_at: bigint("expires_at", { mode: "number" }).notNull(),
 });
 
-export const gobizSessions = pgTable("gobiz_sessions", {
-  merchant_id: text("merchant_id")
-    .primaryKey()
-    .references(() => merchants.id),
-  data: text("data").notNull(),
-  updated_at: bigint("updated_at", { mode: "number" }).notNull(),
-});
-
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -103,7 +96,7 @@ export const merchants = pgTable("merchants", {
   name: text("name").notNull(),
   gopay_merchant_id: text("gopay_merchant_id"),
   qris_static: text("qris_static"),
-  config_json: text("config_json"),
+  config_json: jsonb("config_json"),
   status: merchantStatusEnum("status").notNull().default("active"),
   created_at: bigint("created_at", { mode: "number" }).notNull(),
   updated_at: bigint("updated_at", { mode: "number" }).notNull(),

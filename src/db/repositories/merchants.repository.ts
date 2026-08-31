@@ -1,5 +1,11 @@
 import { eq, desc, sql, and } from "drizzle-orm";
-import { merchants, transactions, claims, gobizSessions, apiKeys, notifications } from "../schema";
+import {
+  merchants,
+  transactions,
+  claims,
+  apiKeys,
+  notifications,
+} from "../schema";
 import type { Db } from "../client";
 
 export type MerchantRow = typeof merchants.$inferSelect;
@@ -82,7 +88,10 @@ export async function getMerchantByGopayId(
     .select()
     .from(merchants)
     .where(
-      and(eq(merchants.user_id, userId), eq(merchants.gopay_merchant_id, gopayId)),
+      and(
+        eq(merchants.user_id, userId),
+        eq(merchants.gopay_merchant_id, gopayId),
+      ),
     )
     .limit(1);
   return rows[0] ?? null;
@@ -113,12 +122,38 @@ export async function updateMerchant(
   await db.update(merchants).set(sets).where(eq(merchants.id, id));
 }
 
+export async function saveGoBizSession(
+  db: Db,
+  merchantId: string,
+  data: Record<string, unknown>,
+) {
+  await db
+    .update(merchants)
+    .set({ config_json: data as never })
+    .where(eq(merchants.id, merchantId));
+}
+
+export async function loadGoBizSession(
+  db: Db,
+  merchantId: string,
+): Promise<Record<string, unknown> | null> {
+  const rows = await db
+    .select({ data: merchants.config_json })
+    .from(merchants)
+    .where(eq(merchants.id, merchantId));
+  return (rows[0]?.data as Record<string, unknown> | null) ?? null;
+}
+
+export async function deleteGoBizSession(db: Db, merchantId: string) {
+  await db
+    .update(merchants)
+    .set({ config_json: null })
+    .where(eq(merchants.id, merchantId));
+}
+
 export async function deleteMerchant(db: Db, id: string) {
-  // Hapus child rows dulu (FK ON DELETE no action → blocked tanpa ini).
-  // claims dulu sebelum transactions (claims.transaction_id FK ke transactions).
   await db.delete(claims).where(eq(claims.merchant_id, id));
   await db.delete(transactions).where(eq(transactions.merchant_id, id));
-  await db.delete(gobizSessions).where(eq(gobizSessions.merchant_id, id));
   await db.delete(apiKeys).where(eq(apiKeys.merchant_id, id));
   await db.delete(notifications).where(eq(notifications.merchant_id, id));
   await db.delete(merchants).where(eq(merchants.id, id));

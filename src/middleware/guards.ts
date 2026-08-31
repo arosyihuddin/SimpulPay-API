@@ -74,6 +74,7 @@ export const adminGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (!user || user.role !== "admin")
     fail(403, "Akses ditolak: hanya untuk admin");
   c.set("userId", userId);
+  c.set("role", user.role);
   await next();
 };
 
@@ -81,7 +82,11 @@ export const adminGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
 export const customerGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   const userId = await sessionOk(getDb(c), c.get("adminToken"));
   if (!userId) fail(401, "Tidak terautentikasi atau sesi berakhir");
+  const user = await getUserById(getDb(c), userId);
+  if (!user || user.status !== "active")
+    fail(401, "Tidak terautentikasi atau sesi berakhir");
   c.set("userId", userId);
+  c.set("role", user.role);
   await next();
 };
 

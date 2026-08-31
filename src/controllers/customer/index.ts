@@ -1,5 +1,7 @@
 export * from "./auth";
 export * from "./dashboard";
+export * from "./transactions";
+export * from "./logs";
 export * from "./settings";
 export * from "./merchants";
 export * from "./api-keys";

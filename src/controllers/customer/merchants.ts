@@ -7,8 +7,7 @@ import {
   deleteMerchant,
   deleteGoBizSession,
   insertLog,
-  getActiveSubscription,
-  getPlan,
+  getActivePlanForUser,
   getMerchantByUser,
   getMerchantByGopayId,
 } from "../../db/repositories";
@@ -20,11 +19,17 @@ import {
 import { loadSession, refreshSession } from "../../services/sessionManager";
 import { parseQrisTlv, setQrisStatic } from "../../services/qris";
 import { decodeQRCodeFromImage } from "../../services/qrDecoder";
+import { formatTransaction } from "../../services/gojek";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import type { Db } from "../../db/client";
 import { getDb } from "../../db/client";
-import { bad, currentUserId, paramId } from "./helpers";
+import {
+  bad,
+  currentUserId,
+  paramId,
+  fetchMonthTransactions,
+} from "./helpers";
 
 /** Ambil merchant milik user dari :id path, cek status aktif. */
 async function ownedActiveMerchant(DB: Db, userId: string, merchantId: string) {
@@ -42,16 +47,17 @@ export async function createMerchantCtl(c: Context<AppEnv>) {
   if (name.length < 2) bad("Nama merchant minimal 2 karakter");
   const type = body?.type === "shopeepay" ? "shopeepay" : "gopay";
 
-  // Limit per plan: hitung merchant yang udah dipakai, blokir kalau mentok.
-  const sub = await getActiveSubscription(DB, userId);
-  const plan = sub ? await getPlan(DB, sub.plan_id) : null;
-  const limit = plan?.max_merchants ?? 1;
-  const count = await countMerchantsByUser(DB, userId);
-  if (count >= limit) {
-    bad(
-      `Batas maksimal ${limit} merchant untuk plan ${plan?.name ?? "Free"}. Upgrade plan untuk menambah merchant.`,
-      403,
-    );
+  const isAdmin = c.get("role") === "admin";
+  if (!isAdmin) {
+    const active = await getActivePlanForUser(DB, userId);
+    const limit = active?.plan.max_merchants ?? 1;
+    const count = await countMerchantsByUser(DB, userId);
+    if (count >= limit) {
+      bad(
+        `Batas maksimal ${limit} merchant untuk plan ${active?.plan.name ?? "Free"}. Upgrade plan untuk menambah merchant.`,
+        403,
+      );
+    }
   }
 
   const id = "m_" + crypto.randomUUID().slice(0, 8);
@@ -139,6 +145,29 @@ export async function updateMerchantCtl(c: Context<AppEnv>) {
   return c.json({ success: true });
 }
 
+/** Set status merchant active/inactive (dedicated endpoint). */
+export async function setMerchantStatusCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  const id = c.req.param("id") ?? "";
+  const merchant = await getMerchant(DB, id);
+  if (!merchant) bad("Merchant tidak ditemukan", 404);
+  if (merchant.user_id !== userId) bad("Akses ditolak", 403);
+  const body = await c.req.json();
+  const status = String(body?.status ?? "").trim();
+  if (!["active", "inactive"].includes(status))
+    bad("Status harus active atau inactive");
+  await updateMerchant(DB, id, { status });
+  await insertLog(
+    DB,
+    "INFO",
+    "Merchant " + merchant.name + " status -> " + status,
+    null,
+    userId,
+  );
+  return c.json({ success: true, data: { id, status } });
+}
+
 export async function deleteMerchantCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
@@ -161,6 +190,8 @@ export async function deleteMerchantCtl(c: Context<AppEnv>) {
 export async function qrisParse(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
+  const merchantId = paramId(c);
+  const merchant = await ownedActiveMerchant(DB, userId, merchantId);
   const body = await c.req.json();
   const image = body?.image as string | undefined;
   if (!image) bad("Gambar QRIS (base64) wajib dikirim");
@@ -172,17 +203,13 @@ export async function qrisParse(c: Context<AppEnv>) {
   const sub = parseQrisTlv(merchantInfo);
   const gopayId =
     Object.values(sub).find((v) => /^G\d{9}$/.test(v)) || merchantInfo;
-  let matched = null;
-  if (/^G\d{9}$/.test(gopayId)) {
-    matched = await getMerchantByGopayId(DB, userId, gopayId);
-  }
-  if (matched && matched.status === "active") {
-    await setQrisStatic(DB, matched.id, decoded);
+  if (/^G\d{9}$/.test(gopayId) && merchant.gopay_merchant_id === gopayId) {
+    await setQrisStatic(DB, merchant.id, decoded);
     await insertLog(
       DB,
       "INFO",
       "QRIS static di-update | Merchant " +
-        matched.id +
+        merchant.id +
         " (" +
         decoded.slice(0, 12) +
         "...)",
@@ -198,15 +225,16 @@ export async function qrisParse(c: Context<AppEnv>) {
       merchant_name: tlv["59"],
       city: tlv["60"],
       type: tlv["01"] === "11" ? "static" : "dynamic",
-      matched_merchant: matched
-        ? { id: matched.id, name: matched.name, status: matched.status }
-        : null,
+      matched: merchant.gopay_merchant_id === gopayId,
     },
   });
 }
 
 export async function otpRequest(c: Context<AppEnv>) {
   const DB = getDb(c);
+  const userId = currentUserId(c);
+  const merchantId = paramId(c);
+  const merchant = await ownedActiveMerchant(DB, userId, merchantId);
   const body = await c.req.json();
   if (!body?.phone) bad("Nomor HP wajib diisi");
   const { otpToken, expiresIn, uniqueId } = await requestOtp(body.phone);
@@ -215,7 +243,7 @@ export async function otpRequest(c: Context<AppEnv>) {
     "INFO",
     "OTP dikirim ke " + normalizePhone(body.phone).display,
     null,
-    currentUserId(c),
+    userId,
   );
   return c.json({
     success: true,
@@ -298,4 +326,21 @@ export async function deleteGoBizCtl(c: Context<AppEnv>) {
     userId,
   );
   return c.json({ success: true });
+}
+
+/** Transaksi LIVE GoBiz — detail per merchant, butuh merchant milik user. */
+export async function merchantTransactions(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  const merchantId = paramId(c);
+  const merchant = await getMerchant(DB, merchantId);
+  if (!merchant || merchant.user_id !== userId) bad("Merchant tidak ditemukan", 404);
+  const q = c.req.query();
+  const tx = await fetchMonthTransactions(DB, merchantId);
+  if (!tx.success) return c.json({ success: false, message: tx.message });
+  const total = tx.raw.length;
+  const pageSize = parseInt((q.pageSize as string) || "20", 10);
+  const page = parseInt((q.page as string) || "1", 10);
+  const formatted = tx.raw.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize).map(formatTransaction);
+  return c.json({ success: true, data: { transactions: formatted, total } });
 }

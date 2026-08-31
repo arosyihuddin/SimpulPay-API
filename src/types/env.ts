@@ -16,5 +16,6 @@ export type AppEnv = {
     db: { client: Sql; db: Db } | null;
     userId: string | null;
     merchantId: string | null;
+    role: string | null;
   };
 };

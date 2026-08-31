@@ -122,6 +122,21 @@ export async function getActiveSubscription(db: Db, userId: string): Promise<Sub
   return rows[0] ?? null;
 }
 
+/** Sub aktif + plan-nya dalam 1 query (join). Ganti getActiveSubscription+getPlan kalau dua-duanya dipakai. */
+export async function getActivePlanForUser(
+  db: Db,
+  userId: string,
+): Promise<{ plan: PlanRow; subscription: SubscriptionRow } | null> {
+  const rows = await db
+    .select({ plan: plans, subscription: subscriptions })
+    .from(subscriptions)
+    .innerJoin(plans, eq(plans.id, subscriptions.plan_id))
+    .where(and(eq(subscriptions.user_id, userId), eq(subscriptions.status, "active")))
+    .orderBy(desc(subscriptions.created_at))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function listSubscriptions(db: Db, userId?: string): Promise<SubscriptionRow[]> {
   const conds = [];
   if (userId) conds.push(eq(subscriptions.user_id, userId));
