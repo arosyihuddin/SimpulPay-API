@@ -84,14 +84,13 @@ export async function markTransactionPaid(db: Db, id: string, transactionJson: s
 
 export async function paidTransactionsInRange(
   db: Db,
-  opts: { from: number; to: number; merchantId?: string },
+  opts: { from: number; to: number },
 ): Promise<Array<{ amount: number; created_at: number }>> {
   const conds = [
     eq(transactions.status, "PAID"),
     gte(transactions.created_at, opts.from),
     lte(transactions.created_at, opts.to),
   ];
-  if (opts.merchantId) conds.push(eq(transactions.merchant_id, opts.merchantId));
   return db
     .select({ amount: transactions.amount, created_at: transactions.created_at })
     .from(transactions)

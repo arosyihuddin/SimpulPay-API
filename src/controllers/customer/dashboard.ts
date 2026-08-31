@@ -1,73 +1,37 @@
-import {
-  getMerchant,
-  markTransactionsExpired,
-  queryTransactions,
-} from "../../db/repositories";
+import { markTransactionsExpired, queryTransactions } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
-import { toRupiah } from "../../services/gojek";
-import { bad, currentUserId, fetchMonthTransactions } from "./helpers";
 
 export async function dashboard(c: Context<AppEnv>) {
   const DB = getDb(c);
-  const userId = currentUserId(c);
-  // Tanpa merchantGuard di route: resolve merchant manual, tolerir kosong.
-  const merchantId =
-    c.req.query("merchant_id") || c.req.header("x-merchant-id") || null;
-  if (merchantId) {
-    const merchant = await getMerchant(DB, merchantId);
-    if (!merchant || merchant.user_id !== userId)
-      bad("Merchant tidak ditemukan", 404);
-    if (merchant.status !== "active") bad("Merchant tidak aktif", 403);
-  }
-  // Empty state: user belum punya merchant → statistik nol, frontend kasih onboarding.
-  if (!merchantId)
-    return c.json({
-      success: true,
-      data: {
-        has_merchant: false,
-        stats: {
-          today_income: 0,
-          month_income: null,
-          total_transactions: 0,
-          active_qris: 0,
-          total_qris: 0,
-        },
-        month_fetch_error: null,
-      },
-    });
-  await markTransactionsExpired(DB, Date.now(), merchantId);
-  const qrisAll = await queryTransactions(DB, { limit: 100, merchantId });
+  await markTransactionsExpired(DB, Date.now());
+  const all = await queryTransactions(DB, { limit: 100 });
   const now = Date.now();
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const todayIncome = qrisAll
+  const d = new Date();
+  const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+  const todayIncome = all
     .filter((q) => q.status === "PAID" && q.created_at >= todayStart.getTime())
-    .reduce((sum, q) => sum + q.amount, 0);
-  const activeQris = qrisAll.filter(
+    .reduce((s, q) => s + q.amount, 0);
+  const monthIncome = all
+    .filter((q) => q.status === "PAID" && q.created_at >= monthStart.getTime())
+    .reduce((s, q) => s + q.amount, 0);
+  const activeQris = all.filter(
     (q) => q.status === "PENDING" && q.expires_at > now,
   ).length;
-  const tx = await fetchMonthTransactions(DB, merchantId);
-  const monthIncome = tx.success
-    ? tx.raw.reduce(
-        (sum: number, t: any) =>
-          sum + toRupiah(t.gross_amount || t.real_gross_amount),
-        0,
-      )
-    : null;
   return c.json({
     success: true,
     data: {
-      has_merchant: true,
       stats: {
         today_income: todayIncome,
         month_income: monthIncome,
-        total_transactions: tx.success ? tx.raw.length : null,
+        total_transactions: all.length,
         active_qris: activeQris,
-        total_qris: qrisAll.length,
+        total_qris: all.length,
       },
-      month_fetch_error: tx.message ?? null,
+      month_fetch_error: null,
     },
   });
 }

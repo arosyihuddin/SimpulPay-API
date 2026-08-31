@@ -144,16 +144,8 @@ export async function recentTransactions(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
   const q = c.req.query();
-  const limit = Math.min(
-    parseInt((q.limit as string) || "5", 10),
-    20,
-  );
-  const merchantId = (q.merchant_id as string) || undefined;
-  if (merchantId) {
-    const m = await getMerchant(DB, merchantId);
-    if (!m || m.user_id !== userId) bad("Merchant tidak ditemukan", 404);
-  }
-  const rows = await queryTransactions(DB, { limit, merchantId });
+  const limit = Math.min(parseInt((q.limit as string) || "5", 10), 20);
+  const rows = await queryTransactions(DB, { limit });
   const txns = rows.map((t) => ({
     id: t.id,
     trx_id: t.trx_id,
@@ -169,17 +161,12 @@ export async function recentTransactions(c: Context<AppEnv>) {
 /**
  * Volume transaksi PAID per bucket untuk chart.
  * range=7|30 → per hari (label "d MMM"), range=today → per jam (label "HH:mm").
+ * Scope otomatis ke semua merchant milik user.
  */
 export async function transactionVolume(c: Context<AppEnv>) {
   const DB = getDb(c);
-  const userId = currentUserId(c);
   const q = c.req.query();
   const range = (q.range as string) || "7";
-  const merchantId = (q.merchant_id as string) || undefined;
-  if (merchantId) {
-    const m = await getMerchant(DB, merchantId);
-    if (!m || m.user_id !== userId) bad("Merchant tidak ditemukan", 404);
-  }
 
   const now = Date.now();
   const startOfDay = new Date(now);
@@ -204,7 +191,10 @@ export async function transactionVolume(c: Context<AppEnv>) {
       const next = new Date(d);
       next.setDate(next.getDate() + 1);
       buckets.push({
-        label: d.toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+        label: d.toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "short",
+        }),
         from: d.getTime(),
         to: next.getTime() - 1,
       });
@@ -213,7 +203,7 @@ export async function transactionVolume(c: Context<AppEnv>) {
 
   const from = buckets[0].from;
   const to = buckets[buckets.length - 1].to;
-  const paid = await paidTransactionsInRange(DB, { from, to, merchantId });
+  const paid = await paidTransactionsInRange(DB, { from, to });
 
   const data = buckets.map(
     (b) =>
