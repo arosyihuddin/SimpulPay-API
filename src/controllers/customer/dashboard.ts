@@ -1,4 +1,8 @@
-import { markTransactionsExpired, queryTransactions } from "../../db/repositories";
+import {
+  markTransactionsExpired,
+  queryTransactions,
+  paidIncomeByMerchant,
+} from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
@@ -21,6 +25,13 @@ export async function dashboard(c: Context<AppEnv>) {
   const activeQris = all.filter(
     (q) => q.status === "PENDING" && q.expires_at > now,
   ).length;
+  const merchantIncome = await paidIncomeByMerchant(DB, monthStart.getTime());
+  const topMerchants = merchantIncome.slice(0, 5).map((m, i) => ({
+    rank: i + 1,
+    merchant_id: m.merchant_id,
+    merchant_name: m.merchant_name,
+    total: m.total / 100,
+  }));
   return c.json({
     success: true,
     data: {
@@ -31,6 +42,7 @@ export async function dashboard(c: Context<AppEnv>) {
         active_qris: activeQris,
         total_qris: all.length,
       },
+      top_merchants: topMerchants,
       month_fetch_error: null,
     },
   });

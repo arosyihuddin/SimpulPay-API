@@ -90,6 +90,34 @@ export async function paidTransactionsInRange(
     .where(and(...conds));
 }
 
+/** Pendapatan PAID per merchant sejak `from` (epoch ms), diurutkan terbesar → terkecil. */
+export async function paidIncomeByMerchant(
+  db: Db,
+  from: number,
+): Promise<Array<{ merchant_id: string; merchant_name: string | null; total: number }>> {
+  const rows = await db
+    .select({
+      merchant_id: transactions.merchant_id,
+      merchant_name: merchants.name,
+      total: sql<number>`sum(${transactions.amount})::bigint`,
+    })
+    .from(transactions)
+    .leftJoin(merchants, eq(transactions.merchant_id, merchants.id))
+    .where(
+      and(
+        eq(transactions.status, "PAID"),
+        gte(transactions.created_at, from),
+      ),
+    )
+    .groupBy(transactions.merchant_id, merchants.name)
+    .orderBy(desc(sql`sum(${transactions.amount})`));
+  return rows.map((r) => ({
+    merchant_id: r.merchant_id ?? "",
+    merchant_name: r.merchant_name,
+    total: Number(r.total ?? 0),
+  }));
+}
+
 export async function markTransactionsExpired(db: Db, now = Date.now(), merchantId?: string) {
   const conds: any[] = [and(eq(transactions.status, "PENDING"), lt(transactions.expires_at, now))];
   if (merchantId) conds.push(eq(transactions.merchant_id, merchantId));
