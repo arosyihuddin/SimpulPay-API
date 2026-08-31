@@ -40,8 +40,6 @@ export class MerchantWS implements DurableObject {
         ws.send(text);
       } else if (scope === "admin" && clientScope === "admin") {
         ws.send(text);
-      } else if (scope === "qr" && clientScope?.startsWith("qr:")) {
-        ws.send(text);
       } else if (clientScope === scope) {
         ws.send(text);
       }

@@ -5,7 +5,7 @@ const GOBIZ_TOKEN_URL = 'https://api.gobiz.co.id/goid/token';
 
 const ACCESS_TTL_MS = 24 * 3600 * 1000;
 
-export const UA =
+const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36';
 
 export interface Session {

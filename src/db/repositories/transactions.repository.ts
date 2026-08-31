@@ -75,13 +75,6 @@ export async function countTransactions(
   return Number(r[0]?.c ?? 0);
 }
 
-export async function markTransactionPaid(db: Db, id: string, transactionJson: string) {
-  await db
-    .update(transactions)
-    .set({ status: "PAID", transaction_json: transactionJson })
-    .where(eq(transactions.id, id));
-}
-
 export async function paidTransactionsInRange(
   db: Db,
   opts: { from: number; to: number },

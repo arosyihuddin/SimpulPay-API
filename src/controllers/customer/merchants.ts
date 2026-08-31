@@ -9,7 +9,6 @@ import {
   insertLog,
   getActivePlanForUser,
   getMerchantByUser,
-  getMerchantByGopayId,
 } from "../../db/repositories";
 import {
   requestOtp,

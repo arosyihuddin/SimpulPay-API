@@ -78,25 +78,6 @@ export async function getMerchantByUser(
   return rows[0] ?? null;
 }
 
-/** Cari merchant milik user berdasarkan merchant_id (G9...) — dipakai resolve dari hasil parse QRIS. */
-export async function getMerchantByGopayId(
-  db: Db,
-  userId: string,
-  gopayId: string,
-): Promise<MerchantRow | null> {
-  const rows = await db
-    .select()
-    .from(merchants)
-    .where(
-      and(
-        eq(merchants.user_id, userId),
-        eq(merchants.merchant_id, gopayId),
-      ),
-    )
-    .limit(1);
-  return rows[0] ?? null;
-}
-
 export async function updateMerchant(
   db: Db,
   id: string,

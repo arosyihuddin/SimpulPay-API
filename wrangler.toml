@@ -6,12 +6,6 @@ compatibility_flags = ["nodejs_compat"]
 [durable_objects]
 bindings = [{ name = "MERCHANT_WS", class_name = "MerchantWS" }]
 
-# Loader untuk import template ?raw (qr.html, expired.html)
-[[rules]]
-type = "Text"
-globs = ["**/*.html"]
-fallthrough = true
-
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id = "04defe125a1f4978bbe4c50ec1bd66e8"

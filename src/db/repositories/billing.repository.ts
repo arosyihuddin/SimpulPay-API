@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, lt, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { plans, subscriptions, invoices } from "../schema";
 import type { Db } from "../client";
 
@@ -215,14 +215,6 @@ export async function listInvoices(
     .orderBy(desc(invoices.created_at))
     .limit(opts.limit ?? 50)
     .offset(opts.offset ?? 0);
-}
-
-export async function listPendingInvoices(db: Db, before: number): Promise<InvoiceRow[]> {
-  return db
-    .select()
-    .from(invoices)
-    .where(and(eq(invoices.status, "pending"), lt(invoices.period_end, before)))
-    .orderBy(desc(invoices.created_at));
 }
 
 export async function updateInvoiceStatus(
