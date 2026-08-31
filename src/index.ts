@@ -62,7 +62,7 @@ app.doc("/docs/json", {
     title: "GoMerch API",
     version: "1.0.0",
     description:
-      "Payment Gateway & QRIS Verification — GoPay/GoBiz. Generate QRIS dinamis EMVCo, verifikasi pembayaran via API Gojek merchant, anti double-claim.\n\nFlow: `POST /api/v1/qris` → customer bayar `amount_to_pay` → poll `GET /api/qr-status/:id` sampai `PAID`.",
+      "Payment Gateway & QRIS Verification — GoPay/GoBiz. Generate QRIS dinamis EMVCo, verifikasi pembayaran via API Gojek merchant, anti double-claim.\n\nFlow: `POST /api/v1/qris` → dapatkan `qris_code` → client render QR → verifikasi pembayaran otomatis dari backend.",
   },
   servers: [{ url: "/" }],
   security: [{ ApiKey: [] }],

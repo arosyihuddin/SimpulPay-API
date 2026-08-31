@@ -82,7 +82,6 @@ export async function createQris(c: Context<AppEnv>) {
     data: {
       qris_id: qrisId,
       trx_id: trxId,
-      qris_url: "/qr/" + qrisId,
       qris_code: dynamicCode,
       amount: base,
       unique_code: code,

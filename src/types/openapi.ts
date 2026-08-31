@@ -17,7 +17,6 @@ export const createQrisRes = okRes.extend({
   data: z.object({
     qris_id: z.string(),
     trx_id: z.string(),
-    qris_url: z.string(),
     qris_code: z.string(),
     amount: z.number(),
     unique_code: z.number(),
