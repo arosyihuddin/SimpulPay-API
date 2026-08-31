@@ -134,6 +134,6 @@ export async function getTransactionCode(c: Context<AppEnv>) {
   if (!m || m.user_id !== userId) bad("Akses ditolak", 403);
   return c.json({
     success: true,
-    data: { code: tx.code },
+    data: { code: tx.code, status: tx.status },
   });
 }
