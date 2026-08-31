@@ -6,7 +6,6 @@ import {
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
-import { loadSession, isExpired } from "../../services/sessionManager";
 import { toRupiah } from "../../services/gojek";
 import { bad, currentUserId, fetchMonthTransactions } from "./helpers";
 
@@ -35,11 +34,9 @@ export async function dashboard(c: Context<AppEnv>) {
           active_qris: 0,
           total_qris: 0,
         },
-        gobiz_session: { exists: false },
         month_fetch_error: null,
       },
     });
-  const session = await loadSession(DB, merchantId);
   await markTransactionsExpired(DB, Date.now(), merchantId);
   const qrisAll = await queryTransactions(DB, { limit: 100, merchantId });
   const now = Date.now();
@@ -70,16 +67,6 @@ export async function dashboard(c: Context<AppEnv>) {
         active_qris: activeQris,
         total_qris: qrisAll.length,
       },
-      gobiz_session: session
-        ? {
-            exists: true,
-            phone: session.phone_number,
-            outlet: session.outlet_name,
-            merchant_id: session.merchant_id,
-            expired: isExpired(session),
-            expires_at: session.expires_at,
-          }
-        : { exists: false },
       month_fetch_error: tx.message ?? null,
     },
   });
