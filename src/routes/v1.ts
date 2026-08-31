@@ -1,6 +1,6 @@
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { z } from "zod";
-import { apiKeyGuard, merchantGuard } from "../middleware/guards";
+import { apiKeyGuard } from "../middleware/guards";
 import type { AppEnv } from "../types";
 import {
   health,
@@ -31,7 +31,7 @@ const v1Routes = new OpenAPIHono<AppEnv>();
 v1Routes.use("*", apiKeyGuard);
 const reg: any = (route: any, handler: any) => v1Routes.openapi(route, handler);
 
-// Path-id: daftar sebelum merchantGuard biar gak kena guard query
+// Path-id: merchant di path, bukan dari API key binding
 reg(
   createRoute({
     method: "get",
@@ -60,8 +60,6 @@ reg(
   }),
   merchantStatus,
 );
-
-v1Routes.use("*", merchantGuard);
 
 reg(
   createRoute({

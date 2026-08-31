@@ -33,7 +33,7 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
   "failed",
 ]);
 
-export const qris = pgTable("qris", {
+export const transactions = pgTable("transactions", {
   id: text("id").primaryKey(),
   code: text("code").notNull(),
   amount: integer("amount").notNull(),
@@ -49,7 +49,7 @@ export const qris = pgTable("qris", {
 
 export const claims = pgTable("claims", {
   tx_id: text("tx_id").primaryKey(),
-  qris_id: text("qris_id"),
+  transaction_id: text("transaction_id"),
   merchant_id: text("merchant_id").references(() => merchants.id),
   claimed_at: bigint("claimed_at", { mode: "number" }).notNull(),
 });
@@ -114,6 +114,7 @@ export const apiKeys = pgTable("api_keys", {
   user_id: text("user_id")
     .notNull()
     .references(() => users.id),
+  merchant_id: text("merchant_id").references(() => merchants.id),
   key: text("key").notNull().unique(),
   label: text("label"),
   status: apiKeyStatusEnum("status").notNull().default("active"),

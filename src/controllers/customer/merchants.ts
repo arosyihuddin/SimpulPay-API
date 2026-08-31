@@ -1,4 +1,15 @@
-import { createMerchant, getMerchant, listMerchantsByUser, countMerchantsByUser, updateMerchant, deleteMerchant, deleteGoBizSession, insertLog, getActiveSubscription, getPlan } from "../../db/repositories";
+import {
+  createMerchant,
+  getMerchant,
+  listMerchantsByUser,
+  countMerchantsByUser,
+  updateMerchant,
+  deleteMerchant,
+  deleteGoBizSession,
+  insertLog,
+  getActiveSubscription,
+  getPlan,
+} from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
@@ -18,12 +29,30 @@ export async function createMerchantCtl(c: Context<AppEnv>) {
   const limit = plan?.max_merchants ?? 1;
   const count = await countMerchantsByUser(DB, userId);
   if (count >= limit) {
-    bad(`Batas maksimal ${limit} merchant untuk plan ${plan?.name ?? "Free"}. Upgrade plan untuk menambah merchant.`, 403);
+    bad(
+      `Batas maksimal ${limit} merchant untuk plan ${plan?.name ?? "Free"}. Upgrade plan untuk menambah merchant.`,
+      403,
+    );
   }
 
   const id = "m_" + crypto.randomUUID().slice(0, 8);
-  await createMerchant(DB, { id, userId, name, type, gopayMerchantId: body?.gopay_merchant_id ? String(body.gopay_merchant_id) : null, qrisStatic: body?.qris_static ? String(body.qris_static) : null });
-  await insertLog(DB, "INFO", "Merchant dibuat: " + name + " (" + type + ")", null, userId);
+  await createMerchant(DB, {
+    id,
+    userId,
+    name,
+    type,
+    gopayMerchantId: body?.gopay_merchant_id
+      ? String(body.gopay_merchant_id)
+      : null,
+    qrisStatic: body?.qris_static ? String(body.qris_static) : null,
+  });
+  await insertLog(
+    DB,
+    "INFO",
+    "Merchant dibuat: " + name + " (" + type + ")",
+    null,
+    userId,
+  );
   return c.json({ success: true, data: { id } });
 }
 
@@ -33,7 +62,18 @@ export async function listMerchantsCtl(c: Context<AppEnv>) {
   const merchants = await listMerchantsByUser(DB, userId);
   return c.json({
     success: true,
-    data: { merchants: merchants.map((m) => ({ id: m.id, type: m.type, name: m.name, status: m.status, gopay_merchant_id: m.gopay_merchant_id, qris_static_set: !!m.qris_static, created_at: m.created_at, updated_at: m.updated_at })) },
+    data: {
+      merchants: merchants.map((m) => ({
+        id: m.id,
+        type: m.type,
+        name: m.name,
+        status: m.status,
+        gopay_merchant_id: m.gopay_merchant_id,
+        qris_static_set: !!m.qris_static,
+        created_at: m.created_at,
+        updated_at: m.updated_at,
+      })),
+    },
   });
 }
 
@@ -53,18 +93,30 @@ export async function updateMerchantCtl(c: Context<AppEnv>) {
   }
   if (body?.type !== undefined) {
     const type = String(body.type).trim();
-    if (!["gopay", "shopeepay"].includes(type)) bad("Type harus gopay atau shopeepay");
+    if (!["gopay", "shopeepay"].includes(type))
+      bad("Type harus gopay atau shopeepay");
     patch.type = type;
   }
-  if (body?.gopay_merchant_id !== undefined) patch.gopayMerchantId = body.gopay_merchant_id ? String(body.gopay_merchant_id) : null;
-  if (body?.qris_static !== undefined) patch.qrisStatic = body.qris_static ? String(body.qris_static) : null;
+  if (body?.gopay_merchant_id !== undefined)
+    patch.gopayMerchantId = body.gopay_merchant_id
+      ? String(body.gopay_merchant_id)
+      : null;
+  if (body?.qris_static !== undefined)
+    patch.qrisStatic = body.qris_static ? String(body.qris_static) : null;
   if (body?.status !== undefined) {
     const status = String(body.status).trim();
-    if (!["active", "inactive"].includes(status)) bad("Status harus active atau inactive");
+    if (!["active", "inactive"].includes(status))
+      bad("Status harus active atau inactive");
     patch.status = status;
   }
   await updateMerchant(DB, id, patch);
-  await insertLog(DB, "INFO", "Merchant diubah: " + merchant.name, null, userId);
+  await insertLog(
+    DB,
+    "INFO",
+    "Merchant diubah: " + merchant.name,
+    null,
+    userId,
+  );
   return c.json({ success: true });
 }
 
@@ -77,6 +129,12 @@ export async function deleteMerchantCtl(c: Context<AppEnv>) {
   if (merchant.user_id !== userId) bad("Akses ditolak", 403);
   await deleteGoBizSession(DB, id);
   await deleteMerchant(DB, id);
-  await insertLog(DB, "INFO", "Merchant dihapus: " + merchant.name, null, userId);
+  await insertLog(
+    DB,
+    "INFO",
+    "Merchant dihapus: " + merchant.name,
+    null,
+    userId,
+  );
   return c.json({ success: true });
 }

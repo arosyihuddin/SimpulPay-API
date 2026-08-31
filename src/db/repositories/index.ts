@@ -1,6 +1,6 @@
 // Barrel: seluruh akses DB. Tiap tabel punya repository sendiri di folder ini.
 export * from "./user.repository";
-export * from "./qris.repository";
+export * from "./transactions.repository";
 export * from "./claims.repository";
 export * from "./logs.repository";
 export * from "./settings.repository";

@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import { getQRIS, markQRISPaid, markQRISExpired, insertLog } from "../db/repositories";
+import { getTransaction, markTransactionPaid, markTransactionsExpired, insertLog } from "../db/repositories";
 import { verifyPayment } from "../services/gojek";
 import type { Context } from "hono";
 import type { AppEnv } from "../types";
@@ -38,28 +38,28 @@ export async function qrPage(c: Context<AppEnv>) {
   const DB = getDb(c);
   const id = c.req.param("id") ?? "";
   const query = c.req.query();
-  const qris = await getQRIS(DB, id);
-  if (!qris)
+  const tx = await getTransaction(DB, id);
+  if (!tx)
     return c.html("<h3>Gambar QRIS tidak ditemukan atau telah dihapus</h3>", 404);
 
-  if (qris.status === "PAID") {
+  if (tx.status === "PAID") {
     if (query.format === "raw" || query.raw === "1") {
       return c.body("QRIS Lunas", 200);
     }
-    const tx = JSON.parse(qris.transaction_json || "{}");
-    const initScript = `onPaymentSuccess({order_id:${JSON.stringify(tx.order_id ?? tx.transaction_id ?? null)},payer_issuer:${JSON.stringify(tx.payer_issuer ?? null)},transaction_time:${JSON.stringify(tx.transaction_time ?? null)}});`;
+    const txn = JSON.parse(tx.transaction_json || "{}");
+    const initScript = `onPaymentSuccess({order_id:${JSON.stringify(txn.order_id ?? txn.transaction_id ?? null)},payer_issuer:${JSON.stringify(txn.payer_issuer ?? null)},transaction_time:${JSON.stringify(txn.transaction_time ?? null)}});`;
     const html = render(qrTpl, {
       AMOUNT: "",
       QR_IMAGE_URL: "",
-      ID: qris.id,
+      ID: tx.id,
       EXPIRES_TIMESTAMP: "0",
       PAYLOAD_SCRIPT: initScript,
     });
     return c.html(html);
   }
 
-  if (Date.now() > qris.expires_at) {
-    await markQRISExpired(DB);
+  if (Date.now() > tx.expires_at) {
+    await markTransactionsExpired(DB);
     if (query.format === "raw" || query.raw === "1") {
       return c.body("QRIS Kedaluwarsa", 410);
     }
@@ -67,7 +67,7 @@ export async function qrPage(c: Context<AppEnv>) {
   }
 
   if (query.format === "raw" || query.raw === "1") {
-    const svg = await QRCode.toString(qris.code, {
+    const svg = await QRCode.toString(tx.code, {
       type: "svg",
       width: 300,
       margin: 2,
@@ -80,13 +80,13 @@ export async function qrPage(c: Context<AppEnv>) {
     style: "currency",
     currency: "IDR",
     minimumFractionDigits: 0,
-  }).format(qris.amount);
-  const qrImageUrl = await qrSvgDataUri(qris.code, 260);
+  }).format(tx.amount);
+  const qrImageUrl = await qrSvgDataUri(tx.code, 260);
   const html = render(qrTpl, {
     AMOUNT: formattedAmount,
     QR_IMAGE_URL: qrImageUrl,
-    ID: qris.id,
-    EXPIRES_TIMESTAMP: String(qris.expires_at),
+    ID: tx.id,
+    EXPIRES_TIMESTAMP: String(tx.expires_at),
   });
   return c.html(html);
 }
@@ -94,24 +94,24 @@ export async function qrPage(c: Context<AppEnv>) {
 export async function qrStatus(c: Context<AppEnv>) {
   const DB = getDb(c);
   const id = c.req.param("id") ?? "";
-  const qris = await getQRIS(DB, id);
-  if (!qris)
+  const tx = await getTransaction(DB, id);
+  if (!tx)
     return c.json({
       success: false,
       status: "NOT_FOUND",
       message: "QRIS tidak ditemukan",
     });
 
-  if (qris.status === "PAID")
+  if (tx.status === "PAID")
     return c.json({
       success: true,
       paid: true,
       status: "PAID",
-      transaction: JSON.parse(qris.transaction_json || "{}"),
+      transaction: JSON.parse(tx.transaction_json || "{}"),
     });
 
-  if (Date.now() > qris.expires_at) {
-    await markQRISExpired(DB);
+  if (Date.now() > tx.expires_at) {
+    await markTransactionsExpired(DB);
     return c.json({
       success: false,
       paid: false,
@@ -123,16 +123,16 @@ export async function qrStatus(c: Context<AppEnv>) {
   try {
     const matched = await verifyPayment(
       DB,
-      qris.merchant_id || "",
-      qris.amount,
-      qris.created_at,
+      tx.merchant_id || "",
+      tx.amount,
+      tx.created_at,
       null,
       c.req.header("user-agent"),
-      qris.trx_id || id,
+      tx.trx_id || id,
     );
     if (matched) {
-      await markQRISPaid(DB, id, JSON.stringify(matched));
-      await insertLog(DB, "SUCCESS", `Pembayaran QRIS ID ${id} terverifikasi lunas untuk nominal Rp ${qris.amount}`);
+      await markTransactionPaid(DB, id, JSON.stringify(matched));
+      await insertLog(DB, "SUCCESS", `Pembayaran QRIS ID ${id} terverifikasi lunas untuk nominal Rp ${tx.amount}`);
       return c.json({
         success: true,
         paid: true,

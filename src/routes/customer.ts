@@ -7,8 +7,8 @@ import {
   dashboard,
   listLogsCtl,
   createQris,
-  listQris,
   listTransactions,
+  merchantTransactions,
   settings,
   createApiKeyCtl,
   listApiKeysCtl,
@@ -43,17 +43,31 @@ customerRoutes.get("/me", ...customerAuth, me);
 customerRoutes.post("/change-password", ...customerAuth, changePassword);
 
 // Dashboard: butuh merchant (query/header)
-customerRoutes.get("/dashboard", ...customerAuth, merchantGuard, dashboard);
+customerRoutes.get("/dashboard", ...customerAuth, dashboard);
 customerRoutes.get("/logs", ...customerAuth, listLogsCtl);
 customerRoutes.post("/qris", ...customerAuth, merchantGuard, createQris);
-customerRoutes.get("/qris", ...customerAuth, merchantGuard, listQris);
-customerRoutes.get("/transactions", ...customerAuth, merchantGuard, listTransactions);
+customerRoutes.get("/transactions", ...customerAuth, listTransactions);
 
-// Merchant CRUD (tanpa merchantGuard — create/read/list pake userId)
 customerRoutes.post("/merchants", ...customerAuth, createMerchantCtl);
 customerRoutes.get("/merchants", ...customerAuth, listMerchantsCtl);
-customerRoutes.patch("/merchants/{id}", ...customerAuth, merchantGuard, updateMerchantCtl);
-customerRoutes.delete("/merchants/{id}", ...customerAuth, merchantGuard, deleteMerchantCtl);
+customerRoutes.patch(
+  "/merchants/{id}",
+  ...customerAuth,
+  merchantGuard,
+  updateMerchantCtl,
+);
+customerRoutes.delete(
+  "/merchants/{id}",
+  ...customerAuth,
+  merchantGuard,
+  deleteMerchantCtl,
+);
+customerRoutes.get(
+  "/merchants/{id}",
+  ...customerAuth,
+  merchantGuard,
+  merchantTransactions,
+);
 
 // API keys
 customerRoutes.post("/api-keys", ...customerAuth, createApiKeyCtl);
@@ -62,7 +76,11 @@ customerRoutes.delete("/api-keys/{id}", ...customerAuth, deleteApiKeyCtl);
 
 // Notifications
 customerRoutes.get("/notifications", ...customerAuth, listNotificationsCtl);
-customerRoutes.post("/notifications/{id}/read", ...customerAuth, markNotificationReadCtl);
+customerRoutes.post(
+  "/notifications/{id}/read",
+  ...customerAuth,
+  markNotificationReadCtl,
+);
 
 // Settings
 customerRoutes.get("/settings", ...customerAuth, merchantGuard, settings);
@@ -71,8 +89,18 @@ customerRoutes.post("/qris-static", ...customerAuth, merchantGuard, qrisStatic);
 customerRoutes.post("/merchant-id", ...customerAuth, merchantGuard, merchantId);
 customerRoutes.post("/otp-request", ...customerAuth, otpRequest);
 customerRoutes.post("/otp-verify", ...customerAuth, merchantGuard, otpVerify);
-customerRoutes.post("/refresh-session", ...customerAuth, merchantGuard, refreshSessionCtl);
-customerRoutes.delete("/gobiz-session", ...customerAuth, merchantGuard, deleteGoBizCtl);
+customerRoutes.post(
+  "/refresh-session",
+  ...customerAuth,
+  merchantGuard,
+  refreshSessionCtl,
+);
+customerRoutes.delete(
+  "/gobiz-session",
+  ...customerAuth,
+  merchantGuard,
+  deleteGoBizCtl,
+);
 
 // Billing: customer baca plan, self-service subscribe
 customerRoutes.get("/plans", ...customerAuth, listPlansCtl);

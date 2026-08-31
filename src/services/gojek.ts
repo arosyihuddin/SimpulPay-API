@@ -223,7 +223,7 @@ export async function verifyPayment(
             transaction_time: tx.transaction_time || tx.settlement_time,
           };
         }
-      } else if (qrisId && existingClaim.qris_id === qrisId) {
+      } else if (qrisId && existingClaim.transaction_id === qrisId) {
         return {
           transaction_id: txId,
           order_id: tx.order_id,
@@ -237,7 +237,7 @@ export async function verifyPayment(
         await insertLog(
           DB,
           "INFO",
-          `TRX ${txId} sudah diklaim oleh QRIS ${existingClaim.qris_id || "lain"}, skip untuk QRIS ${qrisId}`,
+          `TRX ${txId} sudah diklaim oleh QRIS ${existingClaim.transaction_id || "lain"}, skip untuk QRIS ${qrisId}`,
         );
         continue;
       }

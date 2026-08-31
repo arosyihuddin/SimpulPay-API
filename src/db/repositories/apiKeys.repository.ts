@@ -6,13 +6,14 @@ export type ApiKeyRow = typeof apiKeys.$inferSelect;
 
 export async function createApiKey(
   db: Db,
-  k: { id: string; userId: string; key: string; label?: string | null },
+  k: { id: string; userId: string; key: string; label?: string | null; merchantId?: string | null },
 ) {
   await db.insert(apiKeys).values({
     id: k.id,
     user_id: k.userId,
     key: k.key,
     label: k.label ?? null,
+    merchant_id: k.merchantId ?? null,
     status: "active",
     last_used_at: null,
     created_at: Date.now(),

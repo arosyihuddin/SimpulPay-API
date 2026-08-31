@@ -34,15 +34,15 @@ export function extractApiKey(c: Context<AppEnv>): string | null {
   );
 }
 
-/** Return userId jika key valid (active + owner user active), else null. */
-export async function apiKeyOk(DB: Db, key: string | null): Promise<string | null> {
+/** Return { userId, merchantId } jika key valid (active + owner user active), else null. */
+export async function apiKeyOk(DB: Db, key: string | null): Promise<{ userId: string; merchantId: string | null } | null> {
   if (!key) return null;
   const row = await getApiKeyByKey(DB, key);
   if (!row || row.status !== "active") return null;
   const owner = await getUserById(DB, row.user_id);
   if (!owner || owner.status !== "active") return null;
   await updateApiKey(DB, row.id, { lastUsedAt: Date.now() });
-  return row.user_id;
+  return { userId: row.user_id, merchantId: row.merchant_id ?? null };
 }
 
 /** Return userId jika sesi valid, else null. */
@@ -59,9 +59,10 @@ async function sessionOk(
 
 export const apiKeyGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   const key = extractApiKey(c);
-  const userId = await apiKeyOk(getDb(c), key);
-  if (!userId) fail(401, "Autentikasi Gagal: API Key tidak valid");
-  c.set("userId", userId);
+  const result = await apiKeyOk(getDb(c), key);
+  if (!result) fail(401, "Autentikasi Gagal: API Key tidak valid");
+  c.set("userId", result.userId);
+  c.set("merchantId", result.merchantId);
   await next();
 };
 

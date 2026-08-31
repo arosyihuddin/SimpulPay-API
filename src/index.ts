@@ -8,7 +8,7 @@ import { customerRoutes } from "./routes/customer";
 import {
   cleanOldClaims,
   cleanExpiredSessions,
-  markQRISExpired,
+  markTransactionsExpired,
   insertLog,
   listAllMerchants,
   insertNotification,
@@ -111,7 +111,7 @@ export default {
         await cleanExpiredSessions(DB);
         // expired per merchant
         const merchants = await listAllMerchants(DB);
-        for (const m of merchants) await markQRISExpired(DB, Date.now(), m.id);
+        for (const m of merchants) await markTransactionsExpired(DB, Date.now(), m.id);
       } catch (err) {
         console.error("[cron] Gagal cleanup:", (err as Error).message);
       }

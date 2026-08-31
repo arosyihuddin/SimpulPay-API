@@ -29,6 +29,20 @@
       "when": 1788118482741,
       "tag": "0003_logs_user_id",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788162327200,
+      "tag": "0004_transactions_rename",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788163624596,
+      "tag": "0005_api_keys_merchant",
+      "breakpoints": true
     }
   ]
 }

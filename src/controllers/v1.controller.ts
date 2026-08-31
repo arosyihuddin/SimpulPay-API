@@ -16,12 +16,13 @@ import {
   verifyPayment,
 } from "../services/gojek";
 import {
-  insertQRIS,
-  getQRIS,
-  markQRISExpired,
+  insertTransaction,
+  getTransaction,
+  markTransactionsExpired,
   insertLog,
   recentLogs,
   getMerchant,
+  listMerchantsByUser,
 } from "../db/repositories";
 import { fail, ok } from "../middleware/errorHandler";
 import { checkDailyPaidLimit } from "../services/limits";
@@ -45,8 +46,16 @@ export async function merchantStatus(c: Context<AppEnv>) {
 
 export async function createQris(c: Context<AppEnv>) {
   const DB = getDb(c);
-  const merchantId = c.get("merchantId");
-  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
+  const userId = c.get("userId");
+  if (!userId) fail(500, "userId tidak ditemukan di context");
+  let merchantId = c.get("merchantId");
+  // Key gak terikat merchant → pilih random merchant aktif milik user.
+  if (!merchantId) {
+    const merchants = await listMerchantsByUser(DB, userId);
+    const active = merchants.filter((m) => m.status === "active");
+    if (active.length === 0) fail(400, "Belum ada merchant aktif. Buat merchant dulu atau bind API key ke merchant.");
+    merchantId = active[Math.floor(Math.random() * active.length)].id;
+  }
   const body = await c.req.json();
   const amount = body?.amount;
   if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
@@ -63,7 +72,7 @@ export async function createQris(c: Context<AppEnv>) {
   const trxId = "TRX-" + Math.random().toString(36).substring(2, 10).toUpperCase();
   const now = Date.now();
   const expiresAt = now + qrisExpiryMs();
-  await insertQRIS(DB, {
+  await insertTransaction(DB, {
     id: qrisId,
     code: dynamicCode!,
     amount: pay,
@@ -94,10 +103,10 @@ export async function createQris(c: Context<AppEnv>) {
 export async function getQris(c: Context<AppEnv>) {
   const DB = getDb(c);
   const id = c.req.param("id") ?? "";
-  const qris = await getQRIS(DB, id);
+  const qris = await getTransaction(DB, id);
   if (!qris) fail(404, "QRIS tidak ditemukan");
   const expired = Date.now() > qris.expires_at;
-  if (expired) await markQRISExpired(DB, Date.now(), qris.merchant_id ?? undefined);
+  if (expired) await markTransactionsExpired(DB, Date.now(), qris.merchant_id ?? undefined);
   return c.json(
     ok({
       data: {
@@ -118,7 +127,7 @@ export async function getQris(c: Context<AppEnv>) {
 export async function checkPayment(c: Context<AppEnv>) {
   const DB = getDb(c);
   const merchantId = c.get("merchantId");
-  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
+  if (!merchantId) fail(400, "API key belum terikat ke merchant. Buat/bind API key ke merchant dulu.");
   const body = await c.req.json();
   const query = c.req.query();
   const amount = body?.amount || query.amount;
@@ -155,7 +164,7 @@ export async function checkPayment(c: Context<AppEnv>) {
 export async function listTransactions(c: Context<AppEnv>) {
   const DB = getDb(c);
   const merchantId = c.get("merchantId");
-  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
+  if (!merchantId) fail(400, "API key belum terikat ke merchant. Buat/bind API key ke merchant dulu.");
   const query = c.req.query();
   try {
     const raw = await fetchTransactionsWithRetry(DB, merchantId, {
@@ -185,7 +194,7 @@ export async function listTransactions(c: Context<AppEnv>) {
 export async function monthTransactions(c: Context<AppEnv>) {
   const DB = getDb(c);
   const merchantId = c.get("merchantId");
-  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
+  if (!merchantId) fail(400, "API key belum terikat ke merchant. Buat/bind API key ke merchant dulu.");
   const now = new Date();
   const startOfMonthUnix = Math.floor(
     new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000,
@@ -214,7 +223,7 @@ export async function monthTransactions(c: Context<AppEnv>) {
 export async function tokenStatus(c: Context<AppEnv>) {
   const DB = getDb(c);
   const merchantId = c.get("merchantId");
-  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
+  if (!merchantId) fail(400, "API key belum terikat ke merchant. Buat/bind API key ke merchant dulu.");
   const activeHeaders = await getValidHeaders(DB, merchantId, c.req.header("user-agent"));
   if (!activeHeaders)
     return c.json(

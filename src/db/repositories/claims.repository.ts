@@ -11,7 +11,7 @@ export async function claimTx(
 ): Promise<boolean> {
   const rows = await db
     .insert(claims)
-    .values({ tx_id: txId, qris_id: qrisId, merchant_id: merchantId ?? null, claimed_at: claimedAt })
+    .values({ tx_id: txId, transaction_id: qrisId, merchant_id: merchantId ?? null, claimed_at: claimedAt })
     .onConflictDoNothing({ target: claims.tx_id })
     .returning({ tx_id: claims.tx_id });
   return rows.length > 0;
