@@ -5,7 +5,6 @@ import {
   countMerchantsByUser,
   updateMerchant,
   deleteMerchant,
-  deleteGoBizSession,
   insertLog,
   getActivePlanForUser,
   getMerchantByUser,
@@ -186,7 +185,6 @@ export async function deleteMerchantCtl(c: Context<AppEnv>) {
   const merchant = await getMerchant(DB, id);
   if (!merchant) bad("Merchant tidak ditemukan", 404);
   if (merchant.user_id !== userId) bad("Akses ditolak", 403);
-  await deleteGoBizSession(DB, id);
   await deleteMerchant(DB, id);
   await insertLog(
     DB,
@@ -323,24 +321,6 @@ export async function refreshSessionCtl(c: Context<AppEnv>) {
     userId,
   );
   return c.json({ success: true, data: { expires_at: refreshed.expires_at } });
-}
-
-export async function deleteGoBizCtl(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const userId = currentUserId(c);
-  const merchantId = paramId(c);
-  const merchant = await ownedActiveMerchant(DB, userId, merchantId);
-  await deleteGoBizSession(DB, merchant.id);
-  await insertLog(
-    DB,
-    "INFO",
-    "Sesi GoBiz dihapus admin | Merchant " +
-      merchant.id +
-      ". Perlu login OTP ulang.",
-    null,
-    userId,
-  );
-  return c.json({ success: true });
 }
 
 /** Transaksi LIVE GoBiz — detail per merchant, butuh merchant milik user. */

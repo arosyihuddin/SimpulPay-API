@@ -1,11 +1,5 @@
 import { eq, desc, sql, and } from "drizzle-orm";
-import {
-  merchants,
-  transactions,
-  claims,
-  apiKeys,
-  notifications,
-} from "../schema";
+import { merchants, claims } from "../schema";
 import type { Db } from "../client";
 
 export type MerchantRow = typeof merchants.$inferSelect;
@@ -125,18 +119,9 @@ export async function loadGoBizSession(
   return (rows[0]?.data as Record<string, unknown> | null) ?? null;
 }
 
-export async function deleteGoBizSession(db: Db, merchantId: string) {
-  await db
-    .update(merchants)
-    .set({ config_json: null })
-    .where(eq(merchants.id, merchantId));
-}
-
 export async function deleteMerchant(db: Db, id: string) {
+  // Sesi GoBiz (config_json) ikut mati sama row merchant; transaksi/API key/notif KEEP
   await db.delete(claims).where(eq(claims.merchant_id, id));
-  await db.delete(transactions).where(eq(transactions.merchant_id, id));
-  await db.delete(apiKeys).where(eq(apiKeys.merchant_id, id));
-  await db.delete(notifications).where(eq(notifications.merchant_id, id));
   await db.delete(merchants).where(eq(merchants.id, id));
 }
 

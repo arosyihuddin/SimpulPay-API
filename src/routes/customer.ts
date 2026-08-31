@@ -20,7 +20,6 @@ import {
   otpRequest,
   otpVerify,
   refreshSessionCtl,
-  deleteGoBizCtl,
   createMerchantCtl,
   listMerchantsCtl,
   merchantSummary,
@@ -78,8 +77,6 @@ customerRoutes.post(
   ...customerAuth,
   refreshSessionCtl,
 );
-customerRoutes.delete("/merchants/:id/clean", ...customerAuth, deleteGoBizCtl);
-
 // API keys
 customerRoutes.post("/api-keys", ...customerAuth, createApiKeyCtl);
 customerRoutes.get("/api-keys", ...customerAuth, listApiKeysCtl);
