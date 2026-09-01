@@ -20,6 +20,7 @@ import {
 } from "../../services/qris";
 import { checkDailyPaidLimit } from "../../services/limits";
 import { broadcast } from "../../services/realtime";
+import { startPooling } from "../../services/pooling";
 
 /** Buat QRIS dinamis → insert transaksi. */
 export async function createQris(c: Context<AppEnv>) {
@@ -80,6 +81,8 @@ export async function createQris(c: Context<AppEnv>) {
     scope: "admin",
     data: { id: qrisId, merchantId, status: "PENDING" },
   });
+  // Pooling otomatis: poll GoBiz sampai transaksi ini (dan pending lain merchant itu) lunas/expired.
+  c.executionCtx.waitUntil(startPooling(c.env, merchantId, userId));
   return c.json({
     success: true,
     data: {
