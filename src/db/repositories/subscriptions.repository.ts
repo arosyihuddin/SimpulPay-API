@@ -1,4 +1,4 @@
-import { eq, and, desc, lt } from "drizzle-orm";
+import { eq, and, or, desc, lt, gte, isNull } from "drizzle-orm";
 import { subscriptions, plans, users } from "../schema";
 import type { Db } from "../client";
 import type { PlanRow } from "./plans.repository";
@@ -29,38 +29,72 @@ export async function createSubscription(
   });
 }
 
-export async function getSubscription(db: Db, id: string): Promise<SubscriptionRow | null> {
-  const rows = await db.select().from(subscriptions).where(eq(subscriptions.id, id));
-  return rows[0] ?? null;
-}
-
-export async function getActiveSubscription(db: Db, userId: string): Promise<SubscriptionRow | null> {
+export async function getSubscription(
+  db: Db,
+  id: string,
+): Promise<SubscriptionRow | null> {
   const rows = await db
     .select()
     .from(subscriptions)
-    .where(and(eq(subscriptions.user_id, userId), eq(subscriptions.status, "active")))
+    .where(eq(subscriptions.id, id));
+  return rows[0] ?? null;
+}
+
+export async function getActiveSubscription(
+  db: Db,
+  userId: string,
+): Promise<SubscriptionRow | null> {
+  const rows = await db
+    .select()
+    .from(subscriptions)
+    .where(
+      and(
+        eq(subscriptions.user_id, userId),
+        eq(subscriptions.status, "active"),
+        or(
+          isNull(subscriptions.ends_at),
+          gte(subscriptions.ends_at, Date.now()),
+        ),
+      ),
+    )
     .orderBy(desc(subscriptions.created_at))
     .limit(1);
   return rows[0] ?? null;
 }
 
 /** Sub pending paling baru untuk user (upgrade yang belum lunas). */
-export async function getPendingSubscription(db: Db, userId: string): Promise<SubscriptionRow | null> {
+export async function getPendingSubscription(
+  db: Db,
+  userId: string,
+): Promise<SubscriptionRow | null> {
   const rows = await db
     .select()
     .from(subscriptions)
-    .where(and(eq(subscriptions.user_id, userId), eq(subscriptions.status, "pending")))
+    .where(
+      and(
+        eq(subscriptions.user_id, userId),
+        eq(subscriptions.status, "pending"),
+      ),
+    )
     .orderBy(desc(subscriptions.created_at))
     .limit(1);
   return rows[0] ?? null;
 }
 
 /** Sub pending yang belum lunas lewat batas waktu (created_at sebelum `olderThanMs`). */
-export async function listStalePendingSubscriptions(db: Db, olderThanMs: number): Promise<SubscriptionRow[]> {
+export async function listStalePendingSubscriptions(
+  db: Db,
+  olderThanMs: number,
+): Promise<SubscriptionRow[]> {
   return db
     .select()
     .from(subscriptions)
-    .where(and(eq(subscriptions.status, "pending"), lt(subscriptions.created_at, olderThanMs)));
+    .where(
+      and(
+        eq(subscriptions.status, "pending"),
+        lt(subscriptions.created_at, olderThanMs),
+      ),
+    );
 }
 
 /** Sub aktif + plan-nya dalam 1 query (join). Ganti getActiveSubscription+getPlan kalau dua-duanya dipakai. */
@@ -72,7 +106,16 @@ export async function getActivePlanForUser(
     .select({ plan: plans, subscription: subscriptions })
     .from(subscriptions)
     .innerJoin(plans, eq(plans.id, subscriptions.plan_id))
-    .where(and(eq(subscriptions.user_id, userId), eq(subscriptions.status, "active")))
+    .where(
+      and(
+        eq(subscriptions.user_id, userId),
+        eq(subscriptions.status, "active"),
+        or(
+          isNull(subscriptions.ends_at),
+          gte(subscriptions.ends_at, Date.now()),
+        ),
+      ),
+    )
     .orderBy(desc(subscriptions.created_at))
     .limit(1);
   return rows[0] ?? null;
@@ -96,21 +139,38 @@ export async function listSubscriptions(
     .leftJoin(users, eq(users.id, subscriptions.user_id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(subscriptions.created_at));
-  return rows.map(({ s, u }) => ({ ...s, user_name: u?.name ?? null, user_email: u?.email ?? null }));
+  return rows.map(({ s, u }) => ({
+    ...s,
+    user_name: u?.name ?? null,
+    user_email: u?.email ?? null,
+  }));
 }
 
-export async function listActiveSubscriptions(db: Db): Promise<SubscriptionRow[]> {
+/** Sub status active tapi ends_at sudah lewat — kandidat expired. */
+export async function listExpiredSubscriptions(
+  db: Db,
+  now = Date.now(),
+): Promise<SubscriptionRow[]> {
   return db
     .select()
     .from(subscriptions)
-    .where(eq(subscriptions.status, "active"))
+    .where(
+      and(
+        eq(subscriptions.status, "active"),
+        lt(subscriptions.ends_at, now),
+      ),
+    )
     .orderBy(desc(subscriptions.created_at));
 }
 
 export async function updateSubscription(
   db: Db,
   id: string,
-  s: { status?: "active" | "pending" | "cancelled" | "expired"; planId?: string; endsAt?: number | null },
+  s: {
+    status?: "active" | "pending" | "cancelled" | "expired";
+    planId?: string;
+    endsAt?: number | null;
+  },
 ) {
   const sets: Record<string, unknown> = { updated_at: Date.now() };
   if (s.status !== undefined) sets.status = s.status;
@@ -133,7 +193,12 @@ export async function activateSubscriptionSwap(
   const actives = await db
     .select()
     .from(subscriptions)
-    .where(and(eq(subscriptions.user_id, userId), eq(subscriptions.status, "active")));
+    .where(
+      and(
+        eq(subscriptions.user_id, userId),
+        eq(subscriptions.status, "active"),
+      ),
+    );
   for (const a of actives) {
     if (a.id !== subId) {
       await db

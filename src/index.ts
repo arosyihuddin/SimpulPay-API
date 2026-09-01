@@ -12,7 +12,8 @@ import {
   insertLog,
   listAllMerchants,
   insertNotification,
-  listActiveSubscriptions,
+  listExpiredSubscriptions,
+  listInvoices,
   createInvoice,
   getPlan,
   listStalePendingSubscriptions,
@@ -124,33 +125,36 @@ export default {
           await updateSubscription(DB, s.id, { status: "cancelled" });
           await insertLog(DB, "INFO", `Stale pending sub ${s.id} dibatalkan (24h)`, null, s.user_id);
         }
-      } catch (err) {
-        console.error("[cron] Gagal cleanup:", (err as Error).message);
-      }
-    } else if (event.cron === "0 0 1 * *") {
-      // generate invoice per siklus — aktif sub yg ends_at lewat
-      const subs = await listActiveSubscriptions(DB);
-      for (const s of subs) {
-        try {
+        // sub aktif yg ends_at lewat → expired + bikin invoice perpanjangan
+        const expired = await listExpiredSubscriptions(DB);
+        for (const s of expired) {
           const now = Date.now();
-          if (s.ends_at && s.ends_at <= now) {
-            const plan = await getPlan(DB, s.plan_id);
-            await createInvoice(DB, {
-              id: "inv_" + crypto.randomUUID().slice(0, 8),
-              userId: s.user_id,
-              subscriptionId: s.id,
-              amount: plan?.price ?? 0,
-              periodStart: s.ends_at,
-              periodEnd: s.ends_at + 30 * 24 * 60 * 60 * 1000,
-            });
-          }
-        } catch (err) {
+          // Jangan duplikat invoice kalo udah ada yg pending utk sub ini
+          const existing = await listInvoices(DB, {
+            subscriptionId: s.id,
+            status: "pending",
+          });
+          await updateSubscription(DB, s.id, { status: "expired" });
           await insertLog(
             DB,
-            "ERROR",
-            `Gagal generate invoice subscription ${s.id}: ${(err as Error).message}`,
+            "INFO",
+            `Sub ${s.id} expired (ends_at lewat); user ${s.user_id} turun ke free`,
+            null,
+            s.user_id,
           );
+          if (existing.length > 0) continue;
+          const plan = await getPlan(DB, s.plan_id);
+          await createInvoice(DB, {
+            id: "inv_" + crypto.randomUUID().slice(0, 8),
+            userId: s.user_id,
+            subscriptionId: s.id,
+            amount: plan?.price ?? 0,
+            periodStart: now,
+            periodEnd: now + 30 * 24 * 60 * 60 * 1000,
+          });
         }
+      } catch (err) {
+        console.error("[cron] Gagal cleanup:", (err as Error).message);
       }
     } else if (event.cron === "* * * * *") {
       // retry webhook queue

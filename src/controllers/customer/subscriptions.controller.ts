@@ -49,13 +49,14 @@ export async function listMySubscriptionsCtl(c: Context<AppEnv>) {
   const sub = await getActiveSubscription(DB, userId);
   if (!sub) {
     // Fallback: free plan
+    const freePlan = await getPlan(DB, "p_free");
     return c.json({
       success: true,
       data: {
         subscription: {
           id: null,
           plan_id: "p_free",
-          plan_name: "Free",
+          plan_name: freePlan?.name,
           status: "active",
           starts_at: null,
           ends_at: null,

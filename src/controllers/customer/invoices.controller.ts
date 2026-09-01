@@ -27,7 +27,7 @@ async function verifyPendingInvoice(
     ? await getTransaction(DB, inv.transaction_id)
     : undefined;
 
-  if (subTx && subTx.status === "EXPIRED") {
+  if (subTx && subTx.status === "EXPIRED" && sub.status === "pending") {
     await updateSubscription(DB, sub.id, { status: "cancelled" });
     await insertLog(
       DB,
@@ -83,11 +83,12 @@ export async function listMyInvoicesCtl(c: Context<AppEnv>) {
   const invoices = await listInvoices(DB, { userId });
 
   // Verify payment utk invoice pending yang masih belum lunas.
+  // Sub status "pending" (upgrade baru) atau "expired" (renewal) — dua-duanya bisa lunas.
   const results = await Promise.all(
     invoices.map(async (inv) => {
       if (inv.status === "paid") return inv;
       const sub = await getSubscription(DB, inv.subscription_id);
-      if (!sub || sub.status !== "pending") return inv;
+      if (!sub || (sub.status !== "pending" && sub.status !== "expired")) return inv;
       const paid = await verifyPendingInvoice(DB, sub, inv);
       if (paid) return { ...inv, status: "paid" as const };
       return inv;

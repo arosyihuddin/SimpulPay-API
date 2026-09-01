@@ -49,7 +49,7 @@ export async function markInvoicePaidCtl(c: Context<AppEnv>) {
   const now = Date.now();
   await updateInvoiceStatus(DB, id, "paid", now);
   const sub = await getSubscription(DB, inv.subscription_id);
-  if (sub && sub.status === "pending") {
+  if (sub && (sub.status === "pending" || sub.status === "expired")) {
     const endsAt =
       inv.period_end && inv.period_end > now ? inv.period_end : now + 30 * 24 * 60 * 60 * 1000;
     await activateSubscriptionSwap(DB, sub.id, sub.user_id, endsAt);
