@@ -7,7 +7,6 @@ import {
   boolean,
   pgEnum,
   jsonb,
-  primaryKey,
 } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "customer"]);
@@ -66,19 +65,6 @@ export const logs = pgTable("logs", {
   user_id: text("user_id"),
 });
 
-export const userSettings = pgTable(
-  "user_settings",
-  {
-    user_id: text("user_id")
-      .notNull()
-      .references(() => users.id),
-    key: text("key").notNull(),
-    value: text("value").notNull(),
-    updated_at: bigint("updated_at", { mode: "number" }).notNull(),
-  },
-  (t) => [primaryKey({ columns: [t.user_id, t.key] })],
-);
-
 export const systemSettings = pgTable("system_settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
@@ -98,6 +84,7 @@ export const users = pgTable("users", {
   password_hash: text("password_hash").notNull(),
   name: text("name"),
   phone: text("phone"),
+  settings_json: text("settings_json"),
   role: userRoleEnum("role").notNull().default("admin"),
   status: userStatusEnum("status").notNull().default("active"),
   created_at: bigint("created_at", { mode: "number" }).notNull(),
@@ -197,5 +184,16 @@ export const invoices = pgTable("invoices", {
   period_start: bigint("period_start", { mode: "number" }).notNull(),
   period_end: bigint("period_end", { mode: "number" }).notNull(),
   paid_at: bigint("paid_at", { mode: "number" }),
+  created_at: bigint("created_at", { mode: "number" }).notNull(),
+});
+
+export const webhookQueue = pgTable("webhook_queue", {
+  id: text("id").primaryKey(),
+  user_id: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  payload: text("payload").notNull(),
+  attempt: integer("attempt").notNull().default(0),
+  next_retry_at: bigint("next_retry_at", { mode: "number" }).notNull(),
   created_at: bigint("created_at", { mode: "number" }).notNull(),
 });

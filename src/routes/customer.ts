@@ -15,6 +15,7 @@ import {
   merchantTransactions,
   settings,
   updateSettings,
+  webhookInfo,
   createApiKeyCtl,
   listApiKeysCtl,
   deleteApiKeyCtl,
@@ -106,6 +107,7 @@ customerRoutes.post(
 // Settings
 customerRoutes.get("/settings", ...customerAuth, settings);
 customerRoutes.patch("/settings", ...customerAuth, updateSettings);
+customerRoutes.get("/settings/webhook", ...customerAuth, webhookInfo);
 
 // Billing: customer baca plan, self-service subscribe
 customerRoutes.get("/plans", ...customerAuth, listPlansCtl);

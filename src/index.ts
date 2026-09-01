@@ -25,6 +25,7 @@ import {
 } from "./services/sessionManager";
 import { createDb, closeDb } from "./db/client";
 import { maintenanceGuard } from "./middleware/guards";
+import { processWebhookQueue } from "./services/webhook";
 import type { AppEnv, Env } from "./types";
 import { MerchantWS } from "./durable_objects/merchantWS";
 
@@ -150,6 +151,13 @@ export default {
             `Gagal generate invoice subscription ${s.id}: ${(err as Error).message}`,
           );
         }
+      }
+    } else if (event.cron === "* * * * *") {
+      // retry webhook queue
+      try {
+        await processWebhookQueue(DB);
+      } catch (err) {
+        console.error("[cron] Gagal process webhook queue:", (err as Error).message);
       }
     } else if (event.cron === "0 */6 * * *") {
       // auto-refresh sesi per merchant

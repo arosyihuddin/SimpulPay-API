@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { userSettings } from "../schema";
+import { users } from "../schema";
 import type { Db } from "../client";
 
 export async function getUserSettings(
@@ -7,10 +7,16 @@ export async function getUserSettings(
   userId: string,
 ): Promise<Record<string, string>> {
   const rows = await db
-    .select({ key: userSettings.key, value: userSettings.value })
-    .from(userSettings)
-    .where(eq(userSettings.user_id, userId));
-  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    .select({ settings_json: users.settings_json })
+    .from(users)
+    .where(eq(users.id, userId));
+  const raw = rows[0]?.settings_json;
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as Record<string, string>;
+  } catch {
+    return {};
+  }
 }
 
 export async function upsertUserSetting(
@@ -19,11 +25,22 @@ export async function upsertUserSetting(
   key: string,
   value: string,
 ) {
+  const current = await getUserSettings(db, userId);
+  current[key] = value;
   await db
-    .insert(userSettings)
-    .values({ user_id: userId, key, value, updated_at: Date.now() })
-    .onConflictDoUpdate({
-      target: [userSettings.user_id, userSettings.key],
-      set: { value, updated_at: Date.now() },
-    });
+    .update(users)
+    .set({ settings_json: JSON.stringify(current), updated_at: Date.now() })
+    .where(eq(users.id, userId));
+}
+
+/** Overwrite seluruh settings — dipakai pas PATCH bulk. */
+export async function setUserSettings(
+  db: Db,
+  userId: string,
+  settings: Record<string, string>,
+) {
+  await db
+    .update(users)
+    .set({ settings_json: JSON.stringify(settings), updated_at: Date.now() })
+    .where(eq(users.id, userId));
 }

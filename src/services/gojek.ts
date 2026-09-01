@@ -2,6 +2,7 @@ import { getValidHeaders, refreshSession } from "./sessionManager";
 import { claimTx, getClaim, getMerchant, insertLog, insertNotification } from "../db/repositories";
 import { getMerchantId } from "./qris";
 import { checkDailyPaidLimit } from "./limits";
+import { sendWebhook } from "./webhook";
 import type { Db } from "../db/client";
 
 const GOJEK_TRANSACTIONS_URL =
@@ -211,6 +212,15 @@ export async function verifyPayment(
               title: "Pembayaran Berhasil",
               message: `Pembayaran Rp${txAmount.toLocaleString("id-ID")} diterima (TRX ${txId})`,
               dataJson: JSON.stringify({ txId, qrisId, amount: txAmount }),
+            });
+            await sendWebhook(DB, merchant.user_id, "transaction.paid", {
+              transaction_id: txId,
+              qris_id: qrisId,
+              trx_id: tx.order_id ?? null,
+              amount: txAmount,
+              merchant_id: merchantId,
+              merchant_name: merchant.name,
+              paid_at: Date.now(),
             });
           }
           return {
