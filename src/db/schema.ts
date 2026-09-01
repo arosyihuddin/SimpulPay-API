@@ -44,7 +44,9 @@ export const transactions = pgTable("transactions", {
   unique_code: integer("unique_code").notNull().default(0),
   trx_id: text("trx_id").notNull(),
   status: text("status").notNull().default("PENDING"),
-  merchant_id: text("merchant_id").references(() => merchants.id),
+  merchant_id: text("merchant_id").references(() => merchants.id, {
+    onDelete: "set null",
+  }),
   user_id: text("user_id").references(() => users.id),
   created_at: bigint("created_at", { mode: "number" }).notNull(),
   expires_at: bigint("expires_at", { mode: "number" }).notNull(),
@@ -53,7 +55,9 @@ export const transactions = pgTable("transactions", {
 export const claims = pgTable("claims", {
   tx_id: text("tx_id").primaryKey(),
   transaction_id: text("transaction_id"),
-  merchant_id: text("merchant_id").references(() => merchants.id),
+  merchant_id: text("merchant_id").references(() => merchants.id, {
+    onDelete: "cascade",
+  }),
   claimed_at: bigint("claimed_at", { mode: "number" }).notNull(),
 });
 
@@ -112,7 +116,9 @@ export const apiKeys = pgTable("api_keys", {
   user_id: text("user_id")
     .notNull()
     .references(() => users.id),
-  merchant_id: text("merchant_id").references(() => merchants.id),
+  merchant_id: text("merchant_id").references(() => merchants.id, {
+    onDelete: "cascade",
+  }),
   key: text("key").notNull().unique(),
   label: text("label"),
   status: apiKeyStatusEnum("status").notNull().default("active"),
@@ -125,7 +131,9 @@ export const notifications = pgTable("notifications", {
   user_id: text("user_id")
     .notNull()
     .references(() => users.id),
-  merchant_id: text("merchant_id").references(() => merchants.id),
+  merchant_id: text("merchant_id").references(() => merchants.id, {
+    onDelete: "cascade",
+  }),
   type: text("type").notNull(),
   title: text("title").notNull(),
   message: text("message").notNull(),

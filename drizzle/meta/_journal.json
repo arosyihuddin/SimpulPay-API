@@ -120,6 +120,13 @@
       "when": 1788268120215,
       "tag": "0016_silky_butterfly",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788268862957,
+      "tag": "0017_common_wendigo",
+      "breakpoints": true
     }
   ]
 }

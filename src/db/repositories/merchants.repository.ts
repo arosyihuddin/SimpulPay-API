@@ -1,5 +1,5 @@
 import { eq, desc, sql, and, isNotNull } from "drizzle-orm";
-import { merchants, claims, users } from "../schema";
+import { merchants, users } from "../schema";
 import type { Db } from "../client";
 
 export type MerchantRow = typeof merchants.$inferSelect;
@@ -88,8 +88,7 @@ export async function updateMerchant(
   const sets: Record<string, unknown> = { updated_at: now };
   if (u.name !== undefined) sets.name = u.name;
   if (u.type !== undefined) sets.type = u.type;
-  if (u.gopayMerchantId !== undefined)
-    sets.merchant_id = u.gopayMerchantId;
+  if (u.gopayMerchantId !== undefined) sets.merchant_id = u.gopayMerchantId;
   if (u.qrisStatic !== undefined) sets.qris_static = u.qrisStatic;
   if (u.status !== undefined) sets.status = u.status;
   if (u.configJson !== undefined) sets.config_json = u.configJson;
@@ -120,8 +119,6 @@ export async function loadGoBizSession(
 }
 
 export async function deleteMerchant(db: Db, id: string) {
-  // Sesi GoBiz (config_json) ikut mati sama row merchant; transaksi/API key/notif KEEP
-  await db.delete(claims).where(eq(claims.merchant_id, id));
   await db.delete(merchants).where(eq(merchants.id, id));
 }
 
@@ -129,8 +126,9 @@ export async function listAllMerchants(db: Db): Promise<MerchantRow[]> {
   return db.select().from(merchants).orderBy(desc(merchants.created_at));
 }
 
-/** Merchant pembayaran platform (milik user admin, aktif, QRIS static siap). */
-export async function getAdminPaymentMerchant(db: Db): Promise<MerchantRow | null> {
+export async function getAdminPaymentMerchant(
+  db: Db,
+): Promise<MerchantRow | null> {
   const rows = await db
     .select({ m: merchants })
     .from(merchants)
