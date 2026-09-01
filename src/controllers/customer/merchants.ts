@@ -23,13 +23,21 @@ import {
 } from "../../services/qris";
 import { decodeQRCodeFromImage } from "../../services/qrDecoder";
 import { formatTransaction } from "../../services/gojek";
+import { getValidHeaders } from "../../services/sessionManager";
 import { checkDailyPaidLimit } from "../../services/limits";
 import { broadcast } from "../../services/realtime";
 import { startPooling } from "../../services/pooling";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
-import { bad, currentUserId, paramId, fetchMonthTransactions, ownedActiveMerchant, ownedMerchant } from "./helpers";
+import {
+  bad,
+  currentUserId,
+  paramId,
+  fetchMonthTransactions,
+  ownedActiveMerchant,
+  ownedMerchant,
+} from "./helpers";
 
 export async function createMerchantCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
@@ -174,6 +182,13 @@ export async function createQris(c: Context<AppEnv>) {
   const userId = currentUserId(c);
   const merchantId = paramId(c);
   const merchant = await ownedActiveMerchant(DB, userId, merchantId);
+  // Cek sesi GoBiz beneran valid (ping 1x) sebelum bikin QRIS — biar gak gagal di pooling.
+  const headers = await getValidHeaders(DB, merchant.id, undefined, true);
+  if (!headers)
+    bad(
+      "Sesi GoBiz belum/tidak valid. Login OTP dulu di Settings → Login GoBiz.",
+      403,
+    );
   const body = await c.req.json();
   const amount = body?.amount;
   if (!amount || isNaN(Number(amount)) || Number(amount) <= 0)

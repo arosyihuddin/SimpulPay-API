@@ -62,9 +62,12 @@ export async function runPooling(env: Env, merchantId: string, userId: string) {
             });
           }
         } catch {
-          // Sesi GoBiz invalid (merchant jadi inactive) → hentikan pooling.
+          // Sesi GoBiz invalid (merchant jadi inactive) → expire semua pending + hentikan pooling.
           const m = await getMerchant(DB, merchantId);
           if (!m || m.status !== "active") {
+            for (const p of rows) {
+              await updateTransactionStatus(DB, p.id, "expired");
+            }
             console.debug(`Pooling merchant ${merchantId} berhenti (sesi invalid)`);
             return;
           }

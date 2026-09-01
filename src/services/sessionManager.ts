@@ -1,7 +1,8 @@
-import { saveGoBizSession, loadGoBizSession } from '../db/repositories';
+import { saveGoBizSession, loadGoBizSession, updateMerchant, insertLog } from '../db/repositories';
 import type { Db } from '../db/client';
 
 const GOBIZ_TOKEN_URL = 'https://api.gobiz.co.id/goid/token';
+const GOBIZ_CONFIG_URL = 'https://api.gobiz.co.id/goresto/v5/public/users/config';
 
 const ACCESS_TTL_MS = 24 * 3600 * 1000;
 
@@ -137,8 +138,41 @@ export async function refreshSession(DB: Db, merchantId: string): Promise<Sessio
   }
 }
 
+function buildHeaders(session: Session, userAgent?: string): Record<string, string> {
+  const cookie =
+    session.cookie ??
+    `access_token=${session.access_token ?? ''}; refresh_token=${session.refresh_token ?? ''}; auth_method=goid`;
+  return {
+    Authorization: `Bearer ${session.access_token ?? ''}`,
+    Cookie: cookie,
+    'authentication-type': 'go-id',
+    Accept: 'application/json, text/plain, */*',
+    Origin: 'https://portal.gofoodmerchant.co.id',
+    Referer: 'https://portal.gofoodmerchant.co.id/',
+    'User-Agent': userAgent || UA,
+  };
+}
+
+/** Ping ringan 1x ke endpoint config — buat mastiin token beneran valid, bukan cuma belum expired lokal. */
+async function pingSession(headers: Record<string, string>): Promise<boolean> {
+  try {
+    const res = await fetch(GOBIZ_CONFIG_URL, {
+      headers: { ...goBizHeaders(), ...headers },
+      signal: AbortSignal.timeout(8000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 let lastMissingWarn = 0;
-export async function getValidHeaders(DB: Db, merchantId: string, userAgent?: string): Promise<Record<string, string> | null> {
+export async function getValidHeaders(
+  DB: Db,
+  merchantId: string,
+  userAgent?: string,
+  verify = false,
+): Promise<Record<string, string> | null> {
   let session = await loadSession(DB, merchantId);
   if (!session || !session.access_token) {
     const now = Date.now();
@@ -146,6 +180,7 @@ export async function getValidHeaders(DB: Db, merchantId: string, userAgent?: st
       lastMissingWarn = now;
       console.log('[SessionManager] PERINGATAN: Sesi GoPay belum tersedia. Login OTP lewat dashboard (Settings → Login GoBiz).');
     }
+    await updateMerchant(DB, merchantId, { status: "inactive" }).catch(() => {});
     return null;
   }
 
@@ -155,18 +190,28 @@ export async function getValidHeaders(DB: Db, merchantId: string, userAgent?: st
     if (refreshed) session = refreshed;
   }
 
-  if (!session.access_token) return null;
-  const cookie =
-    session.cookie ??
-    `access_token=${session.access_token}; refresh_token=${session.refresh_token ?? ''}; auth_method=goid`;
+  if (!session.access_token) {
+    await updateMerchant(DB, merchantId, { status: "inactive" }).catch(() => {});
+    return null;
+  }
 
-  return {
-    Authorization: `Bearer ${session.access_token}`,
-    Cookie: cookie,
-    'authentication-type': 'go-id',
-    Accept: 'application/json, text/plain, */*',
-    Origin: 'https://portal.gofoodmerchant.co.id',
-    Referer: 'https://portal.gofoodmerchant.co.id/',
-    'User-Agent': userAgent || UA,
-  };
+  // verify=true → tes token ke GoBiz sekali. Gagal → refresh sekali, balikin headers baru.
+  if (verify && !(await pingSession(buildHeaders(session, userAgent)))) {
+    console.log('[SessionManager] Token invalid di server, mencoba refresh...');
+    const refreshed = await refreshSession(DB, merchantId);
+    if (!refreshed) {
+      await updateMerchant(DB, merchantId, {
+        status: "inactive",
+      }).catch(() => {});
+      await insertLog(
+        DB,
+        "WARNING",
+        `Sesi GoBiz invalid, merchant ${merchantId} dinonaktifkan`,
+      ).catch(() => {});
+      return null;
+    }
+    return buildHeaders(refreshed, userAgent);
+  }
+
+  return buildHeaders(session, userAgent);
 }
