@@ -11,23 +11,30 @@ import {
 
 export async function listSubscriptionsCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
-  const q = c.req.query;
-  const userId = q("user_id") || undefined;
-  const status = q("status") as
+  const userId = c.req.query("user_id") || undefined;
+  const status = c.req.query("status") as
     | "active"
     | "pending"
     | "cancelled"
     | "expired"
     | undefined;
-  const startFrom = q("start_from") ? Number(q("start_from")) : undefined;
-  const startTo = q("start_to") ? Number(q("start_to")) : undefined;
-  const endFrom = q("end_from") ? Number(q("end_from")) : undefined;
-  const endTo = q("end_to") ? Number(q("end_to")) : undefined;
-  const includeFree = q("include_free") === "1";
-  const limit = Math.min(parseInt(q("limit") ?? "50", 10) || 50, 100);
-  const offset = parseInt(q("offset") ?? "0", 10) || 0;
+  const startFrom = c.req.query("start_from") ? Number(c.req.query("start_from")) : undefined;
+  const startTo = c.req.query("start_to") ? Number(c.req.query("start_to")) : undefined;
+  const endFrom = c.req.query("end_from") ? Number(c.req.query("end_from")) : undefined;
+  const endTo = c.req.query("end_to") ? Number(c.req.query("end_to")) : undefined;
+  const includeFree = c.req.query("include_free") === "1";
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10) || 50, 100);
+  const offset = parseInt(c.req.query("offset") ?? "0", 10) || 0;
 
-  const filter = { userId, status, startFrom, startTo, endFrom, endTo, includeFree };
+  const filter = {
+    userId,
+    status,
+    startFrom,
+    startTo,
+    endFrom,
+    endTo,
+    includeFree,
+  };
   const [subscriptions, total] = await Promise.all([
     listSubscriptions(DB, { ...filter, limit, offset }),
     countSubscriptions(DB, filter),

@@ -141,9 +141,12 @@ function subConds(o: SubFilter) {
   const conds = [];
   if (o.userId) conds.push(eq(subscriptions.user_id, o.userId));
   if (o.status) conds.push(eq(subscriptions.status, o.status));
-  if (o.startFrom !== undefined) conds.push(gte(subscriptions.starts_at, o.startFrom));
-  if (o.startTo !== undefined) conds.push(lte(subscriptions.starts_at, o.startTo));
-  if (o.endFrom !== undefined) conds.push(gte(subscriptions.ends_at, o.endFrom));
+  if (o.startFrom !== undefined)
+    conds.push(gte(subscriptions.starts_at, o.startFrom));
+  if (o.startTo !== undefined)
+    conds.push(lte(subscriptions.starts_at, o.startTo));
+  if (o.endFrom !== undefined)
+    conds.push(gte(subscriptions.ends_at, o.endFrom));
   if (o.endTo !== undefined) conds.push(lte(subscriptions.ends_at, o.endTo));
   if (!o.includeFree) conds.push(ne(plans.type, "free"));
   return conds;
@@ -192,10 +195,7 @@ export async function listExpiredSubscriptions(
     .select()
     .from(subscriptions)
     .where(
-      and(
-        eq(subscriptions.status, "active"),
-        lt(subscriptions.ends_at, now),
-      ),
+      and(eq(subscriptions.status, "active"), lt(subscriptions.ends_at, now)),
     )
     .orderBy(desc(subscriptions.created_at));
 }
