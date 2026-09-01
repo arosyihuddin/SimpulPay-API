@@ -28,11 +28,9 @@ import {
   merchantSummary,
   updateMerchantCtl,
   deleteMerchantCtl,
-  setMerchantStatusCtl,
   listNotificationsCtl,
   markNotificationReadCtl,
   listAnnouncementsCtl,
-  getAnnouncementCtl,
 } from "../controllers/customer";
 import {
   listPlansCtl,
@@ -73,11 +71,6 @@ customerRoutes.get("/merchants", ...customerAuth, listMerchantsCtl);
 customerRoutes.get("/merchants/summary", ...customerAuth, merchantSummary);
 customerRoutes.patch("/merchants/:id", ...customerAuth, updateMerchantCtl);
 customerRoutes.delete("/merchants/:id", ...customerAuth, deleteMerchantCtl);
-customerRoutes.patch(
-  "/merchants/:id/status",
-  ...customerAuth,
-  setMerchantStatusCtl,
-);
 customerRoutes.get(
   "/merchants/:id/transactions",
   ...customerAuth,
@@ -118,6 +111,5 @@ customerRoutes.get("/invoices", ...customerAuth, listMyInvoicesCtl);
 
 // Announcements: baca broadcast
 customerRoutes.get("/announcements", ...customerAuth, listAnnouncementsCtl);
-customerRoutes.get("/announcements/:id", ...customerAuth, getAnnouncementCtl);
 
 export { customerRoutes };

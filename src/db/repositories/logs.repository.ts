@@ -42,11 +42,6 @@ export async function recentLogsByUser(db: Db, userId: string, limit = 100, offs
     .offset(offset);
 }
 
-export async function countLogs(db: Db): Promise<number> {
-  const r = await db.select({ c: sql<number>`count(*)::int` }).from(logs);
-  return Number(r[0]?.c ?? 0);
-}
-
 export async function countLogsByUser(db: Db, userId: string): Promise<number> {
   const r = await db
     .select({ c: sql<number>`count(*)::int` })

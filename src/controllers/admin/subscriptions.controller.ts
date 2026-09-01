@@ -45,14 +45,6 @@ export async function listSubscriptionsCtl(c: Context<AppEnv>) {
   });
 }
 
-export async function getSubscriptionCtl(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const id = paramId(c);
-  const sub = await getSubscription(DB, id);
-  if (!sub) bad("Subscription tidak ditemukan", 404);
-  return c.json({ success: true, data: sub });
-}
-
 export async function cancelSubscriptionCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const id = paramId(c);

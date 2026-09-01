@@ -155,29 +155,6 @@ export async function updateMerchantCtl(c: Context<AppEnv>) {
   return c.json({ success: true });
 }
 
-/** Set status merchant active/inactive (dedicated endpoint). */
-export async function setMerchantStatusCtl(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const userId = currentUserId(c);
-  const id = c.req.param("id") ?? "";
-  const merchant = await getMerchant(DB, id);
-  if (!merchant) bad("Merchant tidak ditemukan", 404);
-  if (merchant.user_id !== userId) bad("Akses ditolak", 403);
-  const body = await c.req.json();
-  const status = String(body?.status ?? "").trim();
-  if (!["active", "inactive"].includes(status))
-    bad("Status harus active atau inactive");
-  await updateMerchant(DB, id, { status });
-  await insertLog(
-    DB,
-    "INFO",
-    "Merchant " + merchant.name + " status -> " + status,
-    null,
-    userId,
-  );
-  return c.json({ success: true, data: { id, status } });
-}
-
 export async function deleteMerchantCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);

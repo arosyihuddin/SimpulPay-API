@@ -30,14 +30,6 @@ export async function listInvoicesCtl(c: Context<AppEnv>) {
   return c.json({ success: true, data: { invoices, total } });
 }
 
-export async function getInvoiceCtl(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const id = paramId(c);
-  const inv = await getInvoice(DB, id);
-  if (!inv) bad("Invoice tidak ditemukan", 404);
-  return c.json({ success: true, data: inv });
-}
-
 /**
  * Approve manual: invoice paid + activate sub pending (swap sub aktif lama).
  */
