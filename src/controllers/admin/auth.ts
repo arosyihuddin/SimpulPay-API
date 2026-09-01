@@ -67,10 +67,11 @@ async function userBillingInfo(DB: Db, userId: string) {
 export async function listUsersCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const q = c.req.query();
+  const search = (q.search as string) || undefined;
   const limit = parseInt((q.limit as string) || "50", 10);
   const offset = parseInt((q.offset as string) || "0", 10);
   const users = await Promise.all(
-    (await listUsers(DB, limit, offset)).map(async (u) => ({
+    (await listUsers(DB, { limit, offset, q: search })).map(async (u) => ({
       id: u.id,
       email: u.email,
       role: u.role,
@@ -82,7 +83,7 @@ export async function listUsersCtl(c: Context<AppEnv>) {
   );
   return c.json({
     success: true,
-    data: { users, total: await countUsers(DB) },
+    data: { users, total: await countUsers(DB, search) },
   });
 }
 

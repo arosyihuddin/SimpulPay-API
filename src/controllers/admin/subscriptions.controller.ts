@@ -4,7 +4,7 @@ import { getDb } from "../../db/client";
 import { bad, paramId } from "./helpers";
 import {
   listSubscriptions,
-  countSubscriptions,
+  countSubscriptionsByStatus,
   getSubscription,
   updateSubscription,
 } from "../../db/repositories";
@@ -37,13 +37,20 @@ export async function listSubscriptionsCtl(c: Context<AppEnv>) {
     includeFree,
     q,
   };
-  const [subscriptions, total] = await Promise.all([
-    listSubscriptions(DB, { ...filter, limit, offset }),
-    countSubscriptions(DB, filter),
-  ]);
+  const [subscriptions, { total, active: activeCount, cancelled: cancelledCount, expired: expiredCount }] =
+    await Promise.all([
+      listSubscriptions(DB, { ...filter, limit, offset }),
+      countSubscriptionsByStatus(DB, {}),
+    ]);
   return c.json({
     success: true,
-    data: { subscriptions, total },
+    data: {
+      subscriptions,
+      total,
+      active_count: activeCount,
+      cancelled_count: cancelledCount,
+      expired_count: expiredCount,
+    },
   });
 }
 

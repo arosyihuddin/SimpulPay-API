@@ -181,16 +181,25 @@ export async function listSubscriptions(
   }));
 }
 
-export async function countSubscriptions(
+/** Total + count per status dalam 1 query (status filter user diabaikan — hitungan global). */
+export async function countSubscriptionsByStatus(
   db: Db,
   o: SubFilter = {},
-): Promise<number> {
+): Promise<{ total: number; active: number; cancelled: number; expired: number }> {
+  const { status: _ignored, ...base } = o;
+  const conds = subConds(base);
   const r = await db
-    .select({ c: sql<number>`count(*)::int` })
+    .select({
+      total: sql<number>`count(*)::int`,
+      active: sql<number>`count(*) filter (where ${subscriptions.status} = 'active')::int`,
+      cancelled: sql<number>`count(*) filter (where ${subscriptions.status} = 'cancelled')::int`,
+      expired: sql<number>`count(*) filter (where ${subscriptions.status} = 'expired')::int`,
+    })
     .from(subscriptions)
     .innerJoin(plans, eq(plans.id, subscriptions.plan_id))
-    .where(subConds(o).length ? and(...subConds(o)) : undefined);
-  return Number(r[0]?.c ?? 0);
+    .leftJoin(users, eq(users.id, subscriptions.user_id))
+    .where(conds.length ? and(...conds) : undefined);
+  return r[0] ?? { total: 0, active: 0, cancelled: 0, expired: 0 };
 }
 
 /** Sub status active tapi ends_at sudah lewat — kandidat expired. */

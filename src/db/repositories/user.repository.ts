@@ -1,20 +1,34 @@
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, or, desc, sql, ilike } from "drizzle-orm";
 import { users } from "../schema";
 import type { Db } from "../client";
 
 export type UserRow = typeof users.$inferSelect;
 
-export async function listUsers(db: Db, limit = 50, offset = 0): Promise<UserRow[]> {
+export async function listUsers(
+  db: Db,
+  opts: { limit?: number; offset?: number; q?: string } = {},
+): Promise<UserRow[]> {
+  const { limit = 50, offset = 0, q } = opts;
+  const where = q
+    ? or(ilike(users.email, `%${q}%`), ilike(users.name, `%${q}%`))
+    : undefined;
   return db
     .select()
     .from(users)
+    .where(where)
     .orderBy(desc(users.created_at))
     .limit(limit)
     .offset(offset);
 }
 
-export async function countUsers(db: Db): Promise<number> {
-  const r = await db.select({ c: sql<number>`count(*)::int` }).from(users);
+export async function countUsers(db: Db, q?: string): Promise<number> {
+  const where = q
+    ? or(ilike(users.email, `%${q}%`), ilike(users.name, `%${q}%`))
+    : undefined;
+  const r = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(users)
+    .where(where);
   return Number(r[0]?.c ?? 0);
 }
 
