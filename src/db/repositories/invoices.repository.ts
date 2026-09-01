@@ -1,8 +1,12 @@
 import { eq, and, desc, sql } from "drizzle-orm";
-import { invoices } from "../schema";
+import { invoices, users } from "../schema";
 import type { Db } from "../client";
 
 export type InvoiceRow = typeof invoices.$inferSelect;
+export type InvoiceWithUser = InvoiceRow & {
+  user_name: string | null;
+  user_email: string | null;
+};
 
 export async function createInvoice(
   db: Db,
@@ -46,18 +50,20 @@ export async function listInvoices(
     limit?: number;
     offset?: number;
   } = {},
-): Promise<InvoiceRow[]> {
+): Promise<InvoiceWithUser[]> {
   const conds = [];
   if (opts.userId) conds.push(eq(invoices.user_id, opts.userId));
   if (opts.subscriptionId) conds.push(eq(invoices.subscription_id, opts.subscriptionId));
   if (opts.status) conds.push(eq(invoices.status, opts.status));
-  return db
-    .select()
+  const rows = await db
+    .select({ i: invoices, u: users })
     .from(invoices)
+    .leftJoin(users, eq(users.id, invoices.user_id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(invoices.created_at))
     .limit(opts.limit ?? 50)
     .offset(opts.offset ?? 0);
+  return rows.map(({ i, u }) => ({ ...i, user_name: u?.name ?? null, user_email: u?.email ?? null }));
 }
 
 export async function updateInvoiceStatus(

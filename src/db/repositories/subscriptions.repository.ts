@@ -1,5 +1,5 @@
 import { eq, and, desc, lt } from "drizzle-orm";
-import { subscriptions, plans } from "../schema";
+import { subscriptions, plans, users } from "../schema";
 import type { Db } from "../client";
 import type { PlanRow } from "./plans.repository";
 
@@ -78,14 +78,25 @@ export async function getActivePlanForUser(
   return rows[0] ?? null;
 }
 
-export async function listSubscriptions(db: Db, userId?: string): Promise<SubscriptionRow[]> {
+export type SubscriptionWithUser = SubscriptionRow & {
+  user_name: string | null;
+  user_email: string | null;
+};
+
+/** Semua sub + data user (name/email) via join. Dipakai admin list. */
+export async function listSubscriptions(
+  db: Db,
+  userId?: string,
+): Promise<SubscriptionWithUser[]> {
   const conds = [];
   if (userId) conds.push(eq(subscriptions.user_id, userId));
-  return db
-    .select()
+  const rows = await db
+    .select({ s: subscriptions, u: users })
     .from(subscriptions)
+    .leftJoin(users, eq(users.id, subscriptions.user_id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(subscriptions.created_at));
+  return rows.map(({ s, u }) => ({ ...s, user_name: u?.name ?? null, user_email: u?.email ?? null }));
 }
 
 export async function listActiveSubscriptions(db: Db): Promise<SubscriptionRow[]> {
