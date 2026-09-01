@@ -224,7 +224,7 @@ export async function otpRequest(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
   const merchantId = paramId(c);
-  const merchant = await ownedActiveMerchant(DB, userId, merchantId);
+  await ownedActiveMerchant(DB, userId, merchantId);
   const body = await c.req.json();
   if (!body?.phone) bad("Nomor HP wajib diisi");
   const { otpToken, expiresIn, uniqueId } = await requestOtp(body.phone);
