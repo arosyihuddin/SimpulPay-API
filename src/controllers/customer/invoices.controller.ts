@@ -88,7 +88,8 @@ export async function listMyInvoicesCtl(c: Context<AppEnv>) {
     invoices.map(async (inv) => {
       if (inv.status === "paid") return inv;
       const sub = await getSubscription(DB, inv.subscription_id);
-      if (!sub || (sub.status !== "pending" && sub.status !== "expired")) return inv;
+      if (!sub || (sub.status !== "pending" && sub.status !== "expired"))
+        return inv;
       const paid = await verifyPendingInvoice(DB, sub, inv);
       if (paid) return { ...inv, status: "paid" as const };
       return inv;
@@ -106,6 +107,8 @@ export async function listMyInvoicesCtl(c: Context<AppEnv>) {
         subscription_id: i.subscription_id,
         transaction_id: i.transaction_id,
         amount: i.amount,
+        unique_code: tx?.unique_code ?? null,
+        amount_to_pay: tx?.amount ?? null,
         status: i.status,
         qris_code: i.status === "pending" && tx ? tx.code : null,
         period_start: i.period_start,
