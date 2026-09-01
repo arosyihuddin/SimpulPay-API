@@ -38,7 +38,8 @@ export function extractConfig(data: Record<string, unknown>) {
   const merchantId =
     pickStr(merchant, ["merchant_id", "id"]) ??
     pickStr(firstMerchant, ["merchant_id", "id"]) ??
-    (asString(data.merchant_id) ?? null);
+    asString(data.merchant_id) ??
+    null;
   const outletName =
     asString(firstOutlet(merchant["outlets"])["name"]) ??
     asString(firstOutlet(firstMerchant["outlets"])["name"]) ??
@@ -52,7 +53,9 @@ export function extractConfig(data: Record<string, unknown>) {
 }
 
 function asRecord(v: unknown): Record<string, unknown> {
-  return v != null && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  return v != null && typeof v === "object"
+    ? (v as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -117,7 +120,11 @@ export async function verifyOtp(
   const tokenRes: any = await tokenReq.json().catch(() => ({}));
   const tokenData = tokenRes?.data ?? tokenRes;
   if (!tokenReq.ok || !tokenData?.access_token) {
-    goBizError(tokenReq, tokenRes, `Verifikasi OTP gagal (HTTP ${tokenReq.status})`);
+    goBizError(
+      tokenReq,
+      tokenRes,
+      `Verifikasi OTP gagal (HTTP ${tokenReq.status})`,
+    );
   }
 
   let gopayMerchantId: string | null = null;
@@ -129,7 +136,10 @@ export async function verifyOtp(
         ...goBizHeaders(),
       },
     });
-    const cfg = (await cfgRes.json().catch(() => ({}))) as Record<string, unknown>;
+    const cfg = (await cfgRes.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
     const rawData: unknown = cfg?.data;
     const extracted = extractConfig(
       rawData != null && typeof rawData === "object"
@@ -138,8 +148,7 @@ export async function verifyOtp(
     );
     gopayMerchantId = extracted.merchantId;
     outletName = extracted.outletName;
-  } catch {
-  }
+  } catch {}
 
   const session = buildSession({
     access_token: tokenData.access_token,
