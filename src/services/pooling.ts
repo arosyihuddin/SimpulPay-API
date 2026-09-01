@@ -1,6 +1,7 @@
 import {
   queryTransactions,
   updateTransactionStatus,
+  updateInvoiceByTransaction,
   getUserSettings,
 } from "../db/repositories";
 import { verifyPayment } from "./gojek";
@@ -23,21 +24,21 @@ export async function runPooling(env: Env, merchantId: string, userId: string) {
     const settings = await getUserSettings(DB, userId);
     const interval = Math.max(
       MIN_INTERVAL_MS,
-      parseInt(settings.pooling_interval || "5000", 10) || 5000,
+      parseInt(settings.pooling_interval || "8000", 10) || 8000,
     );
     while (true) {
-      console.debug("Pooling...");
       const rows = await queryTransactions(DB, {
         merchantId,
-        status: "PENDING",
+        status: "pending",
         limit: 100,
       });
+      console.log(rows);
       if (rows.length === 0) break;
       let alive = 0;
       const now = Date.now();
       for (const t of rows) {
         if (t.expires_at <= now) {
-          await updateTransactionStatus(DB, t.id, "EXPIRED");
+          await updateTransactionStatus(DB, t.id, "expired");
           continue;
         }
         alive++;
@@ -52,11 +53,12 @@ export async function runPooling(env: Env, merchantId: string, userId: string) {
             t.id,
           );
           if (matched) {
-            await updateTransactionStatus(DB, t.id, "PAID");
+            await updateTransactionStatus(DB, t.id, "paid");
+            await updateInvoiceByTransaction(DB, t.id, "paid", Date.now());
             broadcast(env, {
               type: "payment_received",
               scope: "admin",
-              data: { id: t.id, status: "PAID", amount: t.amount },
+              data: { id: t.id, status: "paid", amount: t.amount },
             });
           }
         } catch {

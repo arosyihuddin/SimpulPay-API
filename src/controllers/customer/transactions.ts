@@ -8,6 +8,7 @@ import {
   insertLog,
   paidTransactionsInRange,
 } from "../../db/repositories";
+import type { TransactionStatus } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
@@ -79,7 +80,7 @@ export async function createQris(c: Context<AppEnv>) {
   broadcast(c.env, {
     type: "qris_created",
     scope: "admin",
-    data: { id: qrisId, merchantId, status: "PENDING" },
+    data: { id: qrisId, merchantId, status: "pending" },
   });
   // Pooling otomatis: poll GoBiz sampai transaksi ini (dan pending lain merchant itu) lunas/expired.
   c.executionCtx.waitUntil(startPooling(c.env, merchantId, userId));
@@ -104,7 +105,7 @@ export async function listTransactions(c: Context<AppEnv>) {
   const q = c.req.query();
   const limit = parseInt((q.limit as string) || "50", 10);
   const offset = parseInt((q.offset as string) || "0", 10);
-  const status = (q.status as string) || undefined;
+  const status = (q.status as TransactionStatus | undefined) || undefined;
   const merchantId = (q.merchant_id as string) || undefined;
   if (merchantId) {
     const m = await getMerchant(DB, merchantId);

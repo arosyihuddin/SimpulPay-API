@@ -35,6 +35,11 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
   "overdue",
   "failed",
 ]);
+export const transactionStatusEnum = pgEnum("transaction_status", [
+  "pending",
+  "paid",
+  "expired",
+]);
 
 export const transactions = pgTable("transactions", {
   id: text("id").primaryKey(),
@@ -43,7 +48,7 @@ export const transactions = pgTable("transactions", {
   base_amount: integer("base_amount").notNull().default(0),
   unique_code: integer("unique_code").notNull().default(0),
   trx_id: text("trx_id").notNull(),
-  status: text("status").notNull().default("PENDING"),
+  status: transactionStatusEnum("status").notNull().default("pending"),
   merchant_id: text("merchant_id").references(() => merchants.id, {
     onDelete: "set null",
   }),

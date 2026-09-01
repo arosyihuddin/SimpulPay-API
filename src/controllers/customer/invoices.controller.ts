@@ -27,7 +27,7 @@ async function verifyPendingInvoice(
     ? await getTransaction(DB, inv.transaction_id)
     : undefined;
 
-  if (subTx && subTx.status === "EXPIRED" && sub.status === "pending") {
+  if (subTx && subTx.status === "expired" && sub.status === "pending") {
     await updateSubscription(DB, sub.id, { status: "cancelled" });
     await insertLog(
       DB,
@@ -61,7 +61,7 @@ async function verifyPendingInvoice(
   const endsAt = now + 30 * 24 * 60 * 60 * 1000;
   await activateSubscriptionSwap(DB, sub.id, sub.user_id, endsAt);
   await updateInvoiceStatus(DB, inv.id, "paid", now);
-  await updateTransactionStatus(DB, subTx.id, "PAID");
+  await updateTransactionStatus(DB, subTx.id, "paid");
   await insertLog(
     DB,
     "SUCCESS",

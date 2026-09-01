@@ -14,7 +14,7 @@ const DEFAULTS: Record<string, string> = {
   min_amount: "100",
   max_amount: "10000000",
   fee_percent: "0",
-  pooling_interval: "5000",
+  pooling_interval: "8000",
   webhook_enabled: "false",
   webhook_url: "",
   webhook_secret: "",

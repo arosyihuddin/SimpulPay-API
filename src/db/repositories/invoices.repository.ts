@@ -77,6 +77,21 @@ export async function updateInvoiceStatus(
   await db.update(invoices).set(sets).where(eq(invoices.id, id));
 }
 
+/** Tandai invoice yang merujuk ke transaksi QRIS tertentu (via transaction_id). */
+export async function updateInvoiceByTransaction(
+  db: Db,
+  transactionId: string,
+  status: "paid" | "failed",
+  paidAt?: number | null,
+) {
+  const sets: Record<string, unknown> = { status };
+  if (paidAt !== undefined) sets.paid_at = paidAt;
+  await db
+    .update(invoices)
+    .set(sets)
+    .where(eq(invoices.transaction_id, transactionId));
+}
+
 export async function countInvoices(db: Db, userId?: string): Promise<number> {
   const conds = [];
   if (userId) conds.push(eq(invoices.user_id, userId));

@@ -4,6 +4,8 @@ import type { Db } from "../client";
 
 export type TransactionRow = typeof transactions.$inferSelect;
 
+export type TransactionStatus = "pending" | "paid" | "expired";
+
 export async function insertTransaction(
   db: Db,
   r: {
@@ -28,7 +30,7 @@ export async function insertTransaction(
     trx_id: r.trxId,
     merchant_id: r.merchantId,
     user_id: r.userId,
-    status: "PENDING",
+    status: "pending",
     created_at: r.createdAt,
     expires_at: r.expiresAt,
   });
@@ -39,7 +41,7 @@ export async function getTransaction(db: Db, id: string): Promise<TransactionRow
   return rows[0] ?? null;
 }
 
-export async function updateTransactionStatus(db: Db, id: string, status: string) {
+export async function updateTransactionStatus(db: Db, id: string, status: TransactionStatus) {
   await db.update(transactions).set({ status }).where(eq(transactions.id, id));
 }
 
@@ -49,7 +51,7 @@ type TransactionWithMerchant = TransactionRow & {
 
 export async function queryTransactions(
   db: Db,
-  opts: { limit?: number; offset?: number; merchantId?: string; userId?: string; status?: string } = {},
+  opts: { limit?: number; offset?: number; merchantId?: string; userId?: string; status?: TransactionStatus } = {},
 ): Promise<TransactionWithMerchant[]> {
   const { limit = 50, offset = 0, merchantId, userId, status } = opts;
   const conds = [];
@@ -69,7 +71,7 @@ export async function queryTransactions(
 
 export async function countTransactions(
   db: Db,
-  opts: { merchantId?: string; userId?: string; status?: string } = {},
+  opts: { merchantId?: string; userId?: string; status?: TransactionStatus } = {},
 ): Promise<number> {
   const { merchantId, userId, status } = opts;
   const conds = [];
@@ -88,7 +90,7 @@ export async function paidTransactionsInRange(
   opts: { from: number; to: number; userId?: string },
 ): Promise<Array<{ amount: number; created_at: number }>> {
   const conds = [
-    eq(transactions.status, "PAID"),
+    eq(transactions.status, "paid"),
     gte(transactions.created_at, opts.from),
     lte(transactions.created_at, opts.to),
   ];
@@ -105,7 +107,7 @@ export async function paidIncomeByMerchant(
   from: number,
   userId?: string,
 ): Promise<Array<{ merchant_id: string; merchant_name: string | null; total: number }>> {
-  const conds = [eq(transactions.status, "PAID"), gte(transactions.created_at, from)];
+  const conds = [eq(transactions.status, "paid"), gte(transactions.created_at, from)];
   if (userId) conds.push(eq(transactions.user_id, userId));
   const rows = await db
     .select({
@@ -133,7 +135,7 @@ export async function topPaidTransactionsByMerchant(
   Array<{ merchant_id: string; merchant_name: string | null; total_transactions: number }>
 > {
   const conds = [
-    eq(transactions.status, "PAID"),
+    eq(transactions.status, "paid"),
     gte(transactions.created_at, opts.from),
     lte(transactions.created_at, opts.to),
   ];
@@ -158,7 +160,7 @@ export async function topPaidTransactionsByMerchant(
 }
 
 export async function markTransactionsExpired(db: Db, now = Date.now(), merchantId?: string) {
-  const conds: any[] = [and(eq(transactions.status, "PENDING"), lt(transactions.expires_at, now))];
+  const conds: any[] = [and(eq(transactions.status, "pending"), lt(transactions.expires_at, now))];
   if (merchantId) conds.push(eq(transactions.merchant_id, merchantId));
-  await db.update(transactions).set({ status: "EXPIRED" }).where(and(...conds));
+  await db.update(transactions).set({ status: "expired" }).where(and(...conds));
 }

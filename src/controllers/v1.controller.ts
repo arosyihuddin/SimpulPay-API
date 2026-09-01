@@ -120,10 +120,10 @@ export async function getQris(c: Context<AppEnv>) {
         amount: qris.amount,
         base_amount: qris.base_amount,
         unique_code: qris.unique_code,
-        status: expired ? "EXPIRED" : qris.status,
+        status: expired ? "expired" : qris.status,
         created_at: qris.created_at,
         expires_at: qris.expires_at,
-        paid: qris.status === "PAID",
+        paid: qris.status === "paid",
       },
     }),
   );

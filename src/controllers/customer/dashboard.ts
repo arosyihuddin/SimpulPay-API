@@ -20,13 +20,13 @@ export async function dashboard(c: Context<AppEnv>) {
   const d = new Date();
   const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
   const todayIncome = all
-    .filter((q) => q.status === "PAID" && q.created_at >= todayStart.getTime())
+    .filter((q) => q.status === "paid" && q.created_at >= todayStart.getTime())
     .reduce((s, q) => s + q.amount, 0);
   const monthIncome = all
-    .filter((q) => q.status === "PAID" && q.created_at >= monthStart.getTime())
+    .filter((q) => q.status === "paid" && q.created_at >= monthStart.getTime())
     .reduce((s, q) => s + q.amount, 0);
   const activeQris = all.filter(
-    (q) => q.status === "PENDING" && q.expires_at > now,
+    (q) => q.status === "pending" && q.expires_at > now,
   ).length;
   const merchantIncome = await paidIncomeByMerchant(DB, monthStart.getTime(), userId);
   const topMerchants = merchantIncome.slice(0, 5).map((m, i) => ({

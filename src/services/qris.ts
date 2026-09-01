@@ -1,6 +1,6 @@
 import { getMerchant } from '../db/repositories';
 import type { Db } from '../db/client';
-const QRIS_EXPIRY_MS = 5 * 60 * 1000;
+const QRIS_EXPIRY_MS = 2 * 60 * 1000;
 
 export async function getQrisStatic(DB: Db, merchantId: string): Promise<string> {
   return (await getMerchant(DB, merchantId))?.qris_static || '';
