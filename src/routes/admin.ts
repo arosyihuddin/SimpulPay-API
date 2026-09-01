@@ -60,10 +60,10 @@ adminRoutes.get("/plans", ...adminAuth, listPlansCtl);
 adminRoutes.get("/plans/:id", ...adminAuth, getPlanCtl);
 adminRoutes.patch("/plans/:id", ...adminAuth, updatePlanCtl);
 adminRoutes.delete("/plans/:id", ...adminAuth, deletePlanCtl);
-adminRoutes.get("/subscriptions", ...adminAuth, listSubscriptionsCtl);
-adminRoutes.get("/subscriptions/:id", ...adminAuth, getSubscriptionCtl);
+adminRoutes.get("/subscribers", ...adminAuth, listSubscriptionsCtl);
+adminRoutes.get("/subscribers/:id", ...adminAuth, getSubscriptionCtl);
 adminRoutes.post(
-  "/subscriptions/:id/cancel",
+  "/subscribers/:id/cancel",
   ...adminAuth,
   cancelSubscriptionCtl,
 );

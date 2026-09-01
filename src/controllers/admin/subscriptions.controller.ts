@@ -3,33 +3,39 @@ import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
 import { bad, paramId } from "./helpers";
 import {
-  getPlan,
   listSubscriptions,
+  countSubscriptions,
   getSubscription,
   updateSubscription,
 } from "../../db/repositories";
 
 export async function listSubscriptionsCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
-  const userId = c.req.query("user_id") || undefined;
-  const includeFree = c.req.query("include_free") === "1";
-  const list = await listSubscriptions(DB, userId);
-  if (!includeFree) {
-    const planTypes = new Map<string, string>();
-    for (const s of list) {
-      if (!planTypes.has(s.plan_id)) {
-        const p = await getPlan(DB, s.plan_id);
-        planTypes.set(s.plan_id, p?.type ?? "paid");
-      }
-    }
-    return c.json({
-      success: true,
-      data: {
-        subscriptions: list.filter((s) => planTypes.get(s.plan_id) !== "free"),
-      },
-    });
-  }
-  return c.json({ success: true, data: { subscriptions: list } });
+  const q = c.req.query;
+  const userId = q("user_id") || undefined;
+  const status = q("status") as
+    | "active"
+    | "pending"
+    | "cancelled"
+    | "expired"
+    | undefined;
+  const startFrom = q("start_from") ? Number(q("start_from")) : undefined;
+  const startTo = q("start_to") ? Number(q("start_to")) : undefined;
+  const endFrom = q("end_from") ? Number(q("end_from")) : undefined;
+  const endTo = q("end_to") ? Number(q("end_to")) : undefined;
+  const includeFree = q("include_free") === "1";
+  const limit = Math.min(parseInt(q("limit") ?? "50", 10) || 50, 100);
+  const offset = parseInt(q("offset") ?? "0", 10) || 0;
+
+  const filter = { userId, status, startFrom, startTo, endFrom, endTo, includeFree };
+  const [subscriptions, total] = await Promise.all([
+    listSubscriptions(DB, { ...filter, limit, offset }),
+    countSubscriptions(DB, filter),
+  ]);
+  return c.json({
+    success: true,
+    data: { subscriptions, total },
+  });
 }
 
 export async function getSubscriptionCtl(c: Context<AppEnv>) {

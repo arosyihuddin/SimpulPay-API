@@ -1,4 +1,4 @@
-import { eq, and, or, desc, lt, gte, isNull } from "drizzle-orm";
+import { eq, and, or, desc, lt, gte, lte, ne, isNull, sql } from "drizzle-orm";
 import { subscriptions, plans, users } from "../schema";
 import type { Db } from "../client";
 import type { PlanRow } from "./plans.repository";
@@ -124,26 +124,63 @@ export async function getActivePlanForUser(
 export type SubscriptionWithUser = SubscriptionRow & {
   user_name: string | null;
   user_email: string | null;
+  plan_type: string | null;
 };
 
-/** Semua sub + data user (name/email) via join. Dipakai admin list. */
+type SubFilter = {
+  userId?: string;
+  status?: "active" | "pending" | "cancelled" | "expired";
+  startFrom?: number;
+  startTo?: number;
+  endFrom?: number;
+  endTo?: number;
+  includeFree?: boolean;
+};
+
+function subConds(o: SubFilter) {
+  const conds = [];
+  if (o.userId) conds.push(eq(subscriptions.user_id, o.userId));
+  if (o.status) conds.push(eq(subscriptions.status, o.status));
+  if (o.startFrom !== undefined) conds.push(gte(subscriptions.starts_at, o.startFrom));
+  if (o.startTo !== undefined) conds.push(lte(subscriptions.starts_at, o.startTo));
+  if (o.endFrom !== undefined) conds.push(gte(subscriptions.ends_at, o.endFrom));
+  if (o.endTo !== undefined) conds.push(lte(subscriptions.ends_at, o.endTo));
+  if (!o.includeFree) conds.push(ne(plans.type, "free"));
+  return conds;
+}
+
+/** Semua sub + data user + plan type via join. Dipakai admin list. */
 export async function listSubscriptions(
   db: Db,
-  userId?: string,
+  o: SubFilter & { limit?: number; offset?: number } = {},
 ): Promise<SubscriptionWithUser[]> {
-  const conds = [];
-  if (userId) conds.push(eq(subscriptions.user_id, userId));
   const rows = await db
-    .select({ s: subscriptions, u: users })
+    .select({ s: subscriptions, u: users, p: plans })
     .from(subscriptions)
+    .innerJoin(plans, eq(plans.id, subscriptions.plan_id))
     .leftJoin(users, eq(users.id, subscriptions.user_id))
-    .where(conds.length ? and(...conds) : undefined)
-    .orderBy(desc(subscriptions.created_at));
-  return rows.map(({ s, u }) => ({
+    .where(subConds(o).length ? and(...subConds(o)) : undefined)
+    .orderBy(desc(subscriptions.created_at))
+    .limit(o.limit ?? 50)
+    .offset(o.offset ?? 0);
+  return rows.map(({ s, u, p }) => ({
     ...s,
     user_name: u?.name ?? null,
     user_email: u?.email ?? null,
+    plan_type: p?.type ?? null,
   }));
+}
+
+export async function countSubscriptions(
+  db: Db,
+  o: SubFilter = {},
+): Promise<number> {
+  const r = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(subscriptions)
+    .innerJoin(plans, eq(plans.id, subscriptions.plan_id))
+    .where(subConds(o).length ? and(...subConds(o)) : undefined);
+  return Number(r[0]?.c ?? 0);
 }
 
 /** Sub status active tapi ends_at sudah lewat — kandidat expired. */
