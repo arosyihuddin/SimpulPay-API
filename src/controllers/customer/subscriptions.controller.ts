@@ -5,6 +5,7 @@ import { bad, currentUserId } from "./helpers";
 import {
   getPlan,
   getActiveSubscription,
+  getActivePlanForUser,
   getPendingSubscription,
   createSubscription,
   updateSubscription,
@@ -12,6 +13,8 @@ import {
   insertTransaction,
   insertLog,
   getAdminPaymentMerchant,
+  countMerchantsByUser,
+  countPaidToday,
 } from "../../db/repositories";
 import {
   generateDynamicQRIS,
@@ -46,9 +49,14 @@ export async function listMySubscriptionsCtl(c: Context<AppEnv>) {
     });
   }
 
-  const sub = await getActiveSubscription(DB, userId);
-  if (!sub) {
-    // Fallback: free plan
+  const [active, merchantsUsed, paidToday] = await Promise.all([
+    getActivePlanForUser(DB, userId),
+    countMerchantsByUser(DB, userId),
+    countPaidToday(DB, userId),
+  ]);
+
+  // Fallback: free plan
+  if (!active) {
     const freePlan = await getPlan(DB, "p_free");
     return c.json({
       success: true,
@@ -57,16 +65,23 @@ export async function listMySubscriptionsCtl(c: Context<AppEnv>) {
           id: null,
           plan_id: "p_free",
           plan_name: freePlan?.name,
-          status: "active",
+          max_merchant: freePlan?.max_merchants,
+          daily_paid_limit: freePlan?.daily_paid_limit,
+          type: freePlan?.type,
+          status: freePlan?.active ? "active" : "inactive",
           starts_at: null,
           ends_at: null,
           created_at: null,
+        },
+        usage: {
+          merchants_used: merchantsUsed,
+          paid_today_used: paidToday,
         },
       },
     });
   }
 
-  const plan = await getPlan(DB, sub.plan_id);
+  const { plan, subscription: sub } = active;
   return c.json({
     success: true,
     data: {
@@ -74,10 +89,17 @@ export async function listMySubscriptionsCtl(c: Context<AppEnv>) {
         id: sub.id,
         plan_id: sub.plan_id,
         plan_name: plan?.name ?? null,
+        max_merchant: plan?.max_merchants,
+        daily_paid_limit: plan?.daily_paid_limit,
+        type: plan?.type,
         status: sub.status,
         starts_at: sub.starts_at,
         ends_at: sub.ends_at,
         created_at: sub.created_at,
+      },
+      usage: {
+        merchants_used: merchantsUsed,
+        paid_today_used: paidToday,
       },
     },
   });

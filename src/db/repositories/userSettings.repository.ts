@@ -19,20 +19,6 @@ export async function getUserSettings(
   }
 }
 
-export async function upsertUserSetting(
-  db: Db,
-  userId: string,
-  key: string,
-  value: string,
-) {
-  const current = await getUserSettings(db, userId);
-  current[key] = value;
-  await db
-    .update(users)
-    .set({ settings_json: JSON.stringify(current), updated_at: Date.now() })
-    .where(eq(users.id, userId));
-}
-
 /** Overwrite seluruh settings — dipakai pas PATCH bulk. */
 export async function setUserSettings(
   db: Db,
