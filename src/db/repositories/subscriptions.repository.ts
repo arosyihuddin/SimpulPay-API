@@ -1,4 +1,4 @@
-import { eq, and, or, desc, lt, gte, lte, ne, isNull, sql } from "drizzle-orm";
+import { eq, and, or, desc, lt, gte, lte, ne, isNull, sql, ilike } from "drizzle-orm";
 import { subscriptions, plans, users } from "../schema";
 import type { Db } from "../client";
 import type { PlanRow } from "./plans.repository";
@@ -125,6 +125,7 @@ export type SubscriptionWithUser = SubscriptionRow & {
   user_name: string | null;
   user_email: string | null;
   plan_type: string | null;
+  plan_name: string | null;
 };
 
 type SubFilter = {
@@ -135,12 +136,17 @@ type SubFilter = {
   endFrom?: number;
   endTo?: number;
   includeFree?: boolean;
+  q?: string;
 };
 
 function subConds(o: SubFilter) {
   const conds = [];
   if (o.userId) conds.push(eq(subscriptions.user_id, o.userId));
   if (o.status) conds.push(eq(subscriptions.status, o.status));
+  if (o.q) {
+    const like = `%${o.q}%`;
+    conds.push(or(ilike(users.name, like), ilike(users.email, like)));
+  }
   if (o.startFrom !== undefined)
     conds.push(gte(subscriptions.starts_at, o.startFrom));
   if (o.startTo !== undefined)
@@ -171,6 +177,7 @@ export async function listSubscriptions(
     user_name: u?.name ?? null,
     user_email: u?.email ?? null,
     plan_type: p?.type ?? null,
+    plan_name: p?.name ?? null,
   }));
 }
 

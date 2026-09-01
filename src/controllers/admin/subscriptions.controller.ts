@@ -23,6 +23,7 @@ export async function listSubscriptionsCtl(c: Context<AppEnv>) {
   const endFrom = c.req.query("end_from") ? Number(c.req.query("end_from")) : undefined;
   const endTo = c.req.query("end_to") ? Number(c.req.query("end_to")) : undefined;
   const includeFree = c.req.query("include_free") === "1";
+  const q = c.req.query("q") || undefined;
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10) || 50, 100);
   const offset = parseInt(c.req.query("offset") ?? "0", 10) || 0;
 
@@ -34,6 +35,7 @@ export async function listSubscriptionsCtl(c: Context<AppEnv>) {
     endFrom,
     endTo,
     includeFree,
+    q,
   };
   const [subscriptions, total] = await Promise.all([
     listSubscriptions(DB, { ...filter, limit, offset }),
