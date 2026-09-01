@@ -1,6 +1,6 @@
 import {
   queryTransactions,
-  countTransactions,
+  countTransactionsByStatus,
   markTransactionsExpired,
   getTransaction,
   paidTransactionsInRange,
@@ -11,7 +11,7 @@ import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
 import { bad, currentUserId, ownedMerchant } from "./helpers";
 
-/** Transaksi LOKAL — gabungan semua merchant user, filter status/merchant. */
+/** Transaksi LOKAL — gabungan semua merchant user, filter status/merchant/created/expires. */
 export async function listTransactions(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
@@ -21,10 +21,27 @@ export async function listTransactions(c: Context<AppEnv>) {
   const status = (q.status as TransactionStatus | undefined) || undefined;
   const merchantId = (q.merchant_id as string) || undefined;
   if (merchantId) await ownedMerchant(DB, userId, merchantId);
-  const opts = { limit, offset, status, merchantId, userId };
+  const search = (q.q as string) || undefined;
+  const createdFrom = q.created_from ? Number(q.created_from) : undefined;
+  const createdTo = q.created_to ? Number(q.created_to) : undefined;
+  const expiresFrom = q.expires_from ? Number(q.expires_from) : undefined;
+  const expiresTo = q.expires_to ? Number(q.expires_to) : undefined;
+  const filter = {
+    merchantId,
+    userId,
+    status,
+    q: search,
+    createdFrom,
+    createdTo,
+    expiresFrom,
+    expiresTo,
+  };
   await markTransactionsExpired(DB, Date.now());
-  const rows = await queryTransactions(DB, opts);
-  const total = await countTransactions(DB, { status, merchantId, userId });
+  const [rows, counts] = await Promise.all([
+    queryTransactions(DB, { ...filter, limit, offset }),
+    // Counts global (hanya per-user) — tidak terpengaruh filter q/status/tanggal.
+    countTransactionsByStatus(DB, { userId }),
+  ]);
   const txns = rows.map((t) => ({
     id: t.id,
     trx_id: t.trx_id,
@@ -37,7 +54,16 @@ export async function listTransactions(c: Context<AppEnv>) {
     created_at: t.created_at,
     expires_at: t.expires_at,
   }));
-  return c.json({ success: true, data: { transactions: txns, total } });
+  return c.json({
+    success: true,
+    data: {
+      transactions: txns,
+      total: counts.total,
+      pending_count: counts.pending,
+      paid_count: counts.paid,
+      expired_count: counts.expired,
+    },
+  });
 }
 
 /** Ambil QRIS code (string QR) dari transaksi tertentu. */

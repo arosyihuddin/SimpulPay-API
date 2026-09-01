@@ -1,4 +1,4 @@
-import { eq, and, lt, gte, lte, desc, sql } from "drizzle-orm";
+import { eq, and, or, ilike, lt, gte, lte, desc, sql } from "drizzle-orm";
 import { transactions, merchants } from "../schema";
 import type { Db } from "../client";
 
@@ -49,40 +49,71 @@ type TransactionWithMerchant = TransactionRow & {
   merchant_name: string | null;
 };
 
+type TxFilter = {
+  merchantId?: string;
+  userId?: string;
+  status?: TransactionStatus;
+  q?: string;
+  createdFrom?: number;
+  createdTo?: number;
+  expiresFrom?: number;
+  expiresTo?: number;
+};
+
+function txConds(o: TxFilter) {
+  const conds = [];
+  if (o.merchantId) conds.push(eq(transactions.merchant_id, o.merchantId));
+  if (o.userId) conds.push(eq(transactions.user_id, o.userId));
+  if (o.status) conds.push(eq(transactions.status, o.status));
+  if (o.q) {
+    const like = `%${o.q}%`;
+    conds.push(
+      or(ilike(transactions.trx_id, like), ilike(merchants.name, like)),
+    );
+  }
+  if (o.createdFrom !== undefined)
+    conds.push(gte(transactions.created_at, o.createdFrom));
+  if (o.createdTo !== undefined)
+    conds.push(lte(transactions.created_at, o.createdTo));
+  if (o.expiresFrom !== undefined)
+    conds.push(gte(transactions.expires_at, o.expiresFrom));
+  if (o.expiresTo !== undefined)
+    conds.push(lte(transactions.expires_at, o.expiresTo));
+  return conds;
+}
+
 export async function queryTransactions(
   db: Db,
-  opts: { limit?: number; offset?: number; merchantId?: string; userId?: string; status?: TransactionStatus } = {},
+  opts: TxFilter & { limit?: number; offset?: number } = {},
 ): Promise<TransactionWithMerchant[]> {
-  const { limit = 50, offset = 0, merchantId, userId, status } = opts;
-  const conds = [];
-  if (merchantId) conds.push(eq(transactions.merchant_id, merchantId));
-  if (userId) conds.push(eq(transactions.user_id, userId));
-  if (status) conds.push(eq(transactions.status, status));
+  const { limit = 50, offset = 0, ...rest } = opts;
   const rows = await db
     .select({ t: transactions, m: merchants })
     .from(transactions)
     .leftJoin(merchants, eq(transactions.merchant_id, merchants.id))
-    .where(conds.length ? and(...conds) : undefined)
+    .where(txConds(rest).length ? and(...txConds(rest)) : undefined)
     .orderBy(desc(transactions.created_at))
     .limit(limit)
     .offset(offset);
   return rows.map(({ t, m }) => ({ ...t, merchant_name: m?.name ?? null }));
 }
 
-export async function countTransactions(
+/** Count per status dalam 1 query. Total = semua (tanpa filter status/merchant/tanggal). */
+export async function countTransactionsByStatus(
   db: Db,
-  opts: { merchantId?: string; userId?: string; status?: TransactionStatus } = {},
-): Promise<number> {
-  const { merchantId, userId, status } = opts;
-  const conds = [];
-  if (merchantId) conds.push(eq(transactions.merchant_id, merchantId));
-  if (userId) conds.push(eq(transactions.user_id, userId));
-  if (status) conds.push(eq(transactions.status, status));
+  o: TxFilter = {},
+): Promise<{ total: number; pending: number; paid: number; expired: number }> {
+  const conds = txConds(o);
   const r = await db
-    .select({ c: sql<number>`count(*)::int` })
+    .select({
+      total: sql<number>`count(*)::int`,
+      pending: sql<number>`count(*) filter (where ${transactions.status} = 'pending')::int`,
+      paid: sql<number>`count(*) filter (where ${transactions.status} = 'paid')::int`,
+      expired: sql<number>`count(*) filter (where ${transactions.status} = 'expired')::int`,
+    })
     .from(transactions)
     .where(conds.length ? and(...conds) : undefined);
-  return Number(r[0]?.c ?? 0);
+  return r[0] ?? { total: 0, pending: 0, paid: 0, expired: 0 };
 }
 
 export async function paidTransactionsInRange(
