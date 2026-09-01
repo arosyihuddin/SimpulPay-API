@@ -10,13 +10,17 @@ export async function createPlanCtl(c: Context<AppEnv>) {
   const name = (body?.name || "").trim();
   if (name.length < 2) bad("Nama plan minimal 2 karakter");
   const id = "p_" + crypto.randomUUID().slice(0, 8);
+  const dplRaw = body?.daily_paid_limit;
+  const dpl = dplRaw !== undefined && dplRaw !== null && dplRaw !== ""
+    ? parseInt(String(dplRaw), 10)
+    : NaN;
   await createPlan(DB, {
     id,
     name,
     type: body?.type === "free" ? "free" : "paid",
-    price: parseInt(body?.price ?? "0", 10),
-    maxMerchants: parseInt(body?.max_merchants ?? "1", 10),
-    dailyPaidLimit: body?.daily_paid_limit !== undefined ? parseInt(body.daily_paid_limit, 10) : null,
+    price: parseInt(body?.price ?? "0", 10) || 0,
+    maxMerchants: parseInt(body?.max_merchants ?? "1", 10) || 1,
+    dailyPaidLimit: Number.isNaN(dpl) ? null : dpl,
     featuresJson: body?.features_json ? JSON.stringify(body.features_json) : null,
     active: body?.active !== false,
   });
@@ -38,9 +42,13 @@ export async function updatePlanCtl(c: Context<AppEnv>) {
     if (!["free", "paid"].includes(body.type)) bad("Type harus free atau paid");
     patch.type = body.type;
   }
-  if (body?.price !== undefined) patch.price = parseInt(body.price, 10);
-  if (body?.max_merchants !== undefined) patch.maxMerchants = parseInt(body.max_merchants, 10);
-  if (body?.daily_paid_limit !== undefined) patch.dailyPaidLimit = parseInt(body.daily_paid_limit, 10);
+  if (body?.price !== undefined) patch.price = parseInt(body.price, 10) || 0;
+  if (body?.max_merchants !== undefined)
+    patch.maxMerchants = parseInt(body.max_merchants, 10) || 1;
+  if (body?.daily_paid_limit !== undefined) {
+    const dpl = parseInt(body.daily_paid_limit, 10);
+    patch.dailyPaidLimit = Number.isNaN(dpl) ? null : dpl;
+  }
   if (body?.features_json !== undefined) patch.featuresJson = JSON.stringify(body.features_json);
   if (body?.active !== undefined) patch.active = body.active === true || body.active === "true";
   await updatePlan(DB, id, patch);
