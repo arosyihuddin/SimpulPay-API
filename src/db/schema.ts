@@ -107,6 +107,7 @@ export const merchants = pgTable("merchants", {
   qris_static: text("qris_static"),
   config_json: jsonb("config_json"),
   status: merchantStatusEnum("status").notNull().default("active"),
+  deleted_at: bigint("deleted_at", { mode: "number" }),
   created_at: bigint("created_at", { mode: "number" }).notNull(),
   updated_at: bigint("updated_at", { mode: "number" }).notNull(),
 });

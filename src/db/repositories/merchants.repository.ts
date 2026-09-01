@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, isNotNull } from "drizzle-orm";
+import { eq, desc, sql, and, isNull, isNotNull } from "drizzle-orm";
 import { merchants, users } from "../schema";
 import type { Db } from "../client";
 
@@ -45,7 +45,7 @@ export async function countMerchantsByUser(
   const r = await db
     .select({ c: sql<number>`count(*)::int` })
     .from(merchants)
-    .where(eq(merchants.user_id, userId));
+    .where(and(eq(merchants.user_id, userId), isNull(merchants.deleted_at)));
   return Number(r[0]?.c ?? 0);
 }
 
@@ -56,7 +56,7 @@ export async function listMerchantsByUser(
   return db
     .select()
     .from(merchants)
-    .where(eq(merchants.user_id, userId))
+    .where(and(eq(merchants.user_id, userId), isNull(merchants.deleted_at)))
     .orderBy(desc(merchants.created_at));
 }
 
@@ -119,11 +119,25 @@ export async function loadGoBizSession(
 }
 
 export async function deleteMerchant(db: Db, id: string) {
-  await db.delete(merchants).where(eq(merchants.id, id));
+  // Soft delete: row tetap (data transaksi utuh), cuma nonaktif + bersihin data sensitif
+  await db
+    .update(merchants)
+    .set({
+      status: "inactive",
+      config_json: null,
+      qris_static: null,
+      deleted_at: Date.now(),
+      updated_at: Date.now(),
+    })
+    .where(eq(merchants.id, id));
 }
 
 export async function listAllMerchants(db: Db): Promise<MerchantRow[]> {
-  return db.select().from(merchants).orderBy(desc(merchants.created_at));
+  return db
+    .select()
+    .from(merchants)
+    .where(isNull(merchants.deleted_at))
+    .orderBy(desc(merchants.created_at));
 }
 
 export async function getAdminPaymentMerchant(

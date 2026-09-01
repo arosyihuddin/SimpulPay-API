@@ -127,6 +127,13 @@
       "when": 1788268862957,
       "tag": "0017_common_wendigo",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788273855407,
+      "tag": "0018_narrow_wendell_rand",
+      "breakpoints": true
     }
   ]
 }
