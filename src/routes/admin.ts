@@ -29,6 +29,10 @@ import {
   updateAnnouncementCtl,
   deleteAnnouncementCtl,
 } from "../controllers/admin/announcements";
+import {
+  getMaintenanceCtl,
+  setMaintenanceCtl,
+} from "../controllers/admin/maintenance";
 import { changePassword } from "../controllers/customer/auth";
 import {
   listAnnouncementsCtl,
@@ -67,5 +71,7 @@ adminRoutes.get("/invoices", ...adminAuth, listInvoicesCtl);
 adminRoutes.get("/invoices/:id", ...adminAuth, getInvoiceCtl);
 adminRoutes.post("/invoices/:id/paid", ...adminAuth, markInvoicePaidCtl);
 adminRoutes.post("/invoices/:id/reject", ...adminAuth, rejectInvoiceCtl);
+adminRoutes.get("/maintenance", ...adminAuth, getMaintenanceCtl);
+adminRoutes.post("/maintenance", ...adminAuth, setMaintenanceCtl);
 
 export { adminRoutes };

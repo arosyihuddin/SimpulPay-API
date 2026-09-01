@@ -4,6 +4,7 @@ import {
   getAdminSession,
   getApiKeyByKey,
   getMerchant,
+  getSystemSetting,
   updateApiKey,
 } from "../db/repositories";
 import { getDb, type Db } from "../db/client";
@@ -105,5 +106,29 @@ export const merchantGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (merchant.status !== "active")
     fail(403, "Merchant tidak aktif");
   c.set("merchantId", merchantId);
+  await next();
+};
+
+/**
+ * Maintenance mode: blok semua request non-admin (503) selama flag ON.
+ * Dipasang app-level di index.ts. Yang di-exempt: /admin (toggle off),
+ * /login+/logout (admin masuk lewat sini), /health (monitoring).
+ */
+export const maintenanceGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const path = c.req.path;
+  if (
+    path.startsWith("/admin") ||
+    path === "/login" ||
+    path === "/logout" ||
+    path === "/health" ||
+    path === "/api/health"
+  )
+    return next();
+  const maintenance = await getSystemSetting(getDb(c), "maintenance");
+  if (maintenance === "true") {
+    const err: any = new Error("Maintenance mode aktif, coba lagi nanti");
+    err.status = 503;
+    throw err;
+  }
   await next();
 };

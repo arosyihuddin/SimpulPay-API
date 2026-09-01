@@ -12,3 +12,4 @@ export * from "./plans.repository";
 export * from "./subscriptions.repository";
 export * from "./invoices.repository";
 export * from "./userSettings.repository";
+export * from "./systemSettings.repository";

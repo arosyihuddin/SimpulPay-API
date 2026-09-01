@@ -24,6 +24,7 @@ import {
   refreshSession,
 } from "./services/sessionManager";
 import { createDb, closeDb } from "./db/client";
+import { maintenanceGuard } from "./middleware/guards";
 import type { AppEnv, Env } from "./types";
 import { MerchantWS } from "./durable_objects/merchantWS";
 
@@ -52,6 +53,8 @@ app.use(
     credentials: true,
   }),
 );
+
+app.use("*", maintenanceGuard);
 
 app.route("/", publicRoutes);
 app.route("/", customerRoutes);

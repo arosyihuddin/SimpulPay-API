@@ -16,6 +16,7 @@ import {
   getUserByUsername,
   createUser,
 } from "../src/db/repositories/user.repository";
+import { setSystemSetting } from "../src/db/repositories/systemSettings.repository";
 import { hashPassword } from "../src/utils/auth.helper";
 
 const cs =
@@ -81,6 +82,11 @@ if (!existingAdmin) {
 } else {
   console.log(`admin '${adminUsername}' sudah ada`);
 }
+
+// ── System settings ───────────────────────────────────
+// maintenance: false default — toggle via admin POST /admin/maintenance
+await setSystemSetting(db, "maintenance", "false");
+console.log("system_settings maintenance=false (default)");
 
 await client.end();
 console.log("seed selesai ✓");

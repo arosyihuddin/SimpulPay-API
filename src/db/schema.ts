@@ -79,6 +79,12 @@ export const userSettings = pgTable(
   (t) => [primaryKey({ columns: [t.user_id, t.key] })],
 );
 
+export const systemSettings = pgTable("system_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updated_at: bigint("updated_at", { mode: "number" }).notNull(),
+});
+
 export const adminSessions = pgTable("admin_sessions", {
   token: text("token").primaryKey(),
   user_id: text("user_id"),
