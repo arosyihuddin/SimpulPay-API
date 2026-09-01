@@ -36,7 +36,10 @@ export function extractApiKey(c: Context<AppEnv>): string | null {
 }
 
 /** Return { userId, merchantId } jika key valid (active + owner user active), else null. */
-export async function apiKeyOk(DB: Db, key: string | null): Promise<{ userId: string; merchantId: string | null } | null> {
+export async function apiKeyOk(
+  DB: Db,
+  key: string | null,
+): Promise<{ userId: string; merchantId: string | null } | null> {
   if (!key) return null;
   const row = await getApiKeyByKey(DB, key);
   if (!row || row.status !== "active") return null;
@@ -98,26 +101,25 @@ export const customerGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
 export const merchantGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   const merchantId =
     c.req.query("merchant_id") || c.req.header("x-merchant-id") || null;
-  if (!merchantId) fail(400, "merchant_id wajib (query atau header x-merchant-id)");
+  if (!merchantId)
+    fail(400, "merchant_id wajib (query atau header x-merchant-id)");
   const merchant = await getMerchant(getDb(c), merchantId);
   if (!merchant) fail(404, "Merchant tidak ditemukan");
   if (merchant.user_id !== c.get("userId"))
     fail(403, "Akses ditolak: merchant bukan milik akun ini");
-  if (merchant.status !== "active")
-    fail(403, "Merchant tidak aktif");
+  if (merchant.status !== "active") fail(403, "Merchant tidak aktif");
   c.set("merchantId", merchantId);
   await next();
 };
 
 /**
  * Maintenance mode: blok semua request non-admin (503) selama flag ON.
- * Dipasang app-level di index.ts. Yang di-exempt: /admin (toggle off),
- * /login+/logout (admin masuk lewat sini), /health (monitoring).
+ * Admin tetap bisa akses lewat path mana pun (termasuk customer routes).
+ * Yang di-exempt total: /login+/logout (pre-auth), /health (monitoring).
  */
 export const maintenanceGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   const path = c.req.path;
   if (
-    path.startsWith("/admin") ||
     path === "/login" ||
     path === "/logout" ||
     path === "/health" ||
@@ -125,10 +127,17 @@ export const maintenanceGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   )
     return next();
   const maintenance = await getSystemSetting(getDb(c), "maintenance");
-  if (maintenance === "true") {
-    const err: any = new Error("Maintenance mode aktif, coba lagi nanti");
-    err.status = 503;
-    throw err;
+  if (maintenance !== "true") return next();
+  const token = cookieToken(c);
+  if (token) {
+    const userId = await sessionOk(getDb(c), token);
+    if (userId) {
+      const user = await getUserById(getDb(c), userId);
+      if (user?.role === "admin") return next();
+    }
   }
-  await next();
+  const err: any = new Error("Maintenance mode aktif, coba lagi nanti");
+  err.status = 503;
+  err.extra = { maintenance_mode: true };
+  throw err;
 };

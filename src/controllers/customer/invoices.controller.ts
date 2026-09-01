@@ -94,19 +94,29 @@ export async function listMyInvoicesCtl(c: Context<AppEnv>) {
     }),
   );
 
-  return c.json({
-    success: true,
-    data: {
-      invoices: results.map((i) => ({
+  // Sertakan qris_code utk invoice pending → client bisa render QR ulang.
+  const out = await Promise.all(
+    results.map(async (i) => {
+      const tx = i.transaction_id
+        ? await getTransaction(DB, i.transaction_id)
+        : undefined;
+      return {
         id: i.id,
         subscription_id: i.subscription_id,
+        transaction_id: i.transaction_id,
         amount: i.amount,
         status: i.status,
+        qris_code: i.status === "pending" && tx ? tx.code : null,
         period_start: i.period_start,
         period_end: i.period_end,
         paid_at: i.paid_at,
         created_at: i.created_at,
-      })),
-    },
+      };
+    }),
+  );
+
+  return c.json({
+    success: true,
+    data: { invoices: out },
   });
 }
