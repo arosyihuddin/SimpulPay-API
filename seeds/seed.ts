@@ -11,8 +11,7 @@ import {
   createPlan,
   getPlan,
   updatePlan,
-} from "../src/db/repositories/billing.repository";
-import { setSetting } from "../src/db/repositories/settings.repository";
+} from "../src/db/repositories/plans.repository";
 import {
   getUserByUsername,
   createUser,
@@ -65,21 +64,6 @@ for (const p of plans) {
   }
   await createPlan(db, p);
   console.log(`plan ${p.id} dibuat`);
-}
-
-// ── Settings system-wide ────────────────────────────
-const settings: Record<string, string> = {
-  maintenance: "false",
-  default_currency: "IDR",
-  qris_expiry_minutes: "15",
-  min_amount: "100",
-  max_amount: "10000000",
-  fee_percent: "0",
-};
-
-for (const [k, v] of Object.entries(settings)) {
-  await setSetting(db, k, v);
-  console.log(`setting ${k} = ${v}`);
 }
 
 // ── Admin user (pengganti setup) ─────────────────────

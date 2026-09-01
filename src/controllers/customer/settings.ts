@@ -1,20 +1,45 @@
-import { listMerchantsByUser, listApiKeysByUser } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
-import { currentUserId } from "./helpers";
+import { currentUserId, bad } from "./helpers";
+import { getUserSettings, upsertUserSetting } from "../../db/repositories";
+
+const DEFAULTS: Record<string, string> = {
+  default_currency: "IDR",
+  qris_expiry_minutes: "15",
+  min_amount: "100",
+  max_amount: "10000000",
+  fee_percent: "0",
+  pooling_interval: "5000",
+  webhook_enabled: "false",
+};
+
+const ALLOWED_UPDATES = new Set(Object.keys(DEFAULTS));
+
+function mergeSettings(dbRows: Record<string, string>): Record<string, string> {
+  return { ...DEFAULTS, ...dbRows };
+}
 
 export async function settings(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
-  const mask = (v: string) => (v ? v.slice(0, 4) + "****" : "");
-  const merchants = await listMerchantsByUser(DB, userId);
-  const apiKeys = await listApiKeysByUser(DB, userId);
-  return c.json({
-    success: true,
-    data: {
-      merchants: merchants.map((m) => ({ id: m.id, type: m.type, name: m.name, status: m.status, merchant_id: m.merchant_id, qris_static_set: !!m.qris_static, qris_static_masked: m.qris_static ? m.qris_static.slice(0, 12) + "..." : "", created_at: m.created_at, updated_at: m.updated_at })),
-      api_keys: apiKeys.map((k) => ({ id: k.id, label: k.label, key_masked: mask(k.key), status: k.status, last_used_at: k.last_used_at, created_at: k.created_at })),
-    },
-  });
+  const rows = await getUserSettings(DB, userId);
+  return c.json({ success: true, data: { settings: mergeSettings(rows) } });
+}
+
+export async function updateSettings(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  const body = await c.req.json();
+  if (typeof body !== "object" || !body) bad("Request body harus object");
+
+  // Filter hanya key whitelist, simpan perubahan
+  for (const [key, val] of Object.entries(body)) {
+    if (ALLOWED_UPDATES.has(key)) {
+      await upsertUserSetting(DB, userId, key, String(val));
+    }
+  }
+
+  const rows = await getUserSettings(DB, userId);
+  return c.json({ success: true, data: { settings: mergeSettings(rows) } });
 }

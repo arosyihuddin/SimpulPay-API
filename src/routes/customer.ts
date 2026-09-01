@@ -13,6 +13,7 @@ import {
   transactionVolume,
   merchantTransactions,
   settings,
+  updateSettings,
   createApiKeyCtl,
   listApiKeysCtl,
   deleteApiKeyCtl,
@@ -31,7 +32,10 @@ import {
   listAnnouncementsCtl,
   getAnnouncementCtl,
 } from "../controllers/customer";
-import { listPlansCtl, getPlanCtl } from "../controllers/customer/plans.controller";
+import {
+  listPlansCtl,
+  getPlanCtl,
+} from "../controllers/customer/plans.controller";
 import {
   listMySubscriptionsCtl,
   createSubscriptionCtl,
@@ -54,7 +58,11 @@ customerRoutes.post("/qris", ...customerAuth, merchantGuard, createQris);
 customerRoutes.get("/transactions", ...customerAuth, listTransactions);
 customerRoutes.get("/transactions/recent", ...customerAuth, recentTransactions);
 customerRoutes.get("/transactions/volume", ...customerAuth, transactionVolume);
-customerRoutes.get("/transactions/:id/code", ...customerAuth, getTransactionCode);
+customerRoutes.get(
+  "/transactions/:id/code",
+  ...customerAuth,
+  getTransactionCode,
+);
 
 // Merchants
 customerRoutes.post("/merchants", ...customerAuth, createMerchantCtl);
@@ -94,7 +102,8 @@ customerRoutes.post(
 );
 
 // Settings
-customerRoutes.get("/settings", ...customerAuth, merchantGuard, settings);
+customerRoutes.get("/settings", ...customerAuth, settings);
+customerRoutes.patch("/settings", ...customerAuth, updateSettings);
 
 // Billing: customer baca plan, self-service subscribe
 customerRoutes.get("/plans", ...customerAuth, listPlansCtl);

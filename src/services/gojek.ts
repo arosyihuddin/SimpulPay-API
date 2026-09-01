@@ -4,10 +4,10 @@ import { getMerchantId } from "./qris";
 import { checkDailyPaidLimit } from "./limits";
 import type { Db } from "../db/client";
 
-export const GOJEK_TRANSACTIONS_URL =
+const GOJEK_TRANSACTIONS_URL =
   "https://api.gojekapi.com/merchant-analytics/v2/merchants/transactions";
 
-export function goBizAcceptHeaders() {
+function goBizAcceptHeaders() {
   return {
     Accept: "application/json, text/plain, */*",
     "accept-language": "id",
@@ -22,7 +22,7 @@ export function goBizAcceptHeaders() {
   };
 }
 
-export function toRupiah(raw: unknown): number {
+function toRupiah(raw: unknown): number {
   return Math.floor(parseInt(String(raw || 0), 10) / 100);
 }
 

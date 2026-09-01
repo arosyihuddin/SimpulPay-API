@@ -22,7 +22,7 @@ export function parseQrisTlv(payload: string): Record<string, string> {
   return out;
 }
 
-export function calculateCRC16(payload: string) {
+function calculateCRC16(payload: string) {
   let crc = 0xffff;
   for (let i = 0; i < payload.length; i++) {
     crc ^= payload.charCodeAt(i) << 8;

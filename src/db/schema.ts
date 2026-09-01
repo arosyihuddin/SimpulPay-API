@@ -7,6 +7,7 @@ import {
   boolean,
   pgEnum,
   jsonb,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "customer"]);
@@ -65,11 +66,18 @@ export const logs = pgTable("logs", {
   user_id: text("user_id"),
 });
 
-export const settings = pgTable("settings", {
-  key: text("key").primaryKey(),
-  value: text("value").notNull(),
-  updated_at: bigint("updated_at", { mode: "number" }).notNull(),
-});
+export const userSettings = pgTable(
+  "user_settings",
+  {
+    user_id: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+    updated_at: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.user_id, t.key] })],
+);
 
 export const adminSessions = pgTable("admin_sessions", {
   token: text("token").primaryKey(),

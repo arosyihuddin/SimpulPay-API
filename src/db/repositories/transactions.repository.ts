@@ -43,7 +43,7 @@ export async function updateTransactionStatus(db: Db, id: string, status: string
   await db.update(transactions).set({ status }).where(eq(transactions.id, id));
 }
 
-export type TransactionWithMerchant = TransactionRow & {
+type TransactionWithMerchant = TransactionRow & {
   merchant_name: string | null;
 };
 
