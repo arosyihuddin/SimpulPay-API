@@ -23,8 +23,8 @@ export async function getUserById(db: Db, id: string): Promise<UserRow | null> {
   return rows[0] ?? null;
 }
 
-export async function getUserByUsername(db: Db, username: string): Promise<UserRow | null> {
-  const rows = await db.select().from(users).where(eq(users.username, username));
+export async function getUserByEmail(db: Db, email: string): Promise<UserRow | null> {
+  const rows = await db.select().from(users).where(eq(users.email, email));
   return rows[0] ?? null;
 }
 
@@ -32,7 +32,7 @@ export async function createUser(
   db: Db,
   u: {
     id: string;
-    username: string;
+    email: string;
     passwordHash: string;
     role?: "admin" | "customer";
     status?: "active" | "suspended" | "banned";
@@ -41,7 +41,7 @@ export async function createUser(
   const now = Date.now();
   await db.insert(users).values({
     id: u.id,
-    username: u.username,
+    email: u.email,
     password_hash: u.passwordHash,
     role: u.role ?? "admin",
     status: u.status ?? "active",
@@ -53,11 +53,13 @@ export async function createUser(
 export async function updateUser(
   db: Db,
   id: string,
-  u: { username?: string; role?: "admin" | "customer"; passwordHash?: string; status?: "active" | "suspended" | "banned" },
+  u: { email?: string; name?: string | null; phone?: string | null; role?: "admin" | "customer"; passwordHash?: string; status?: "active" | "suspended" | "banned" },
 ) {
   const now = Date.now();
   const sets: Record<string, unknown> = { updated_at: now };
-  if (u.username !== undefined) sets.username = u.username;
+  if (u.email !== undefined) sets.email = u.email;
+  if (u.name !== undefined) sets.name = u.name;
+  if (u.phone !== undefined) sets.phone = u.phone;
   if (u.role !== undefined) sets.role = u.role;
   if (u.passwordHash !== undefined) sets.password_hash = u.passwordHash;
   if (u.status !== undefined) sets.status = u.status;

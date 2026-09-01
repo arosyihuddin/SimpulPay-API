@@ -13,7 +13,7 @@ import {
   updatePlan,
 } from "../src/db/repositories/plans.repository";
 import {
-  getUserByUsername,
+  getUserByEmail,
   createUser,
 } from "../src/db/repositories/user.repository";
 import { setSystemSetting } from "../src/db/repositories/systemSettings.repository";
@@ -42,15 +42,38 @@ type SeedPlan = {
   featuresJson: string | null;
 };
 const plans: SeedPlan[] = [
-  { id: "p_free", name: "Free", type: "free", price: 0, maxMerchants: 1, dailyPaidLimit: 10, featuresJson: null },
-  { id: "p_starter", name: "Starter", type: "paid", price: 49000, maxMerchants: 3, dailyPaidLimit: 50, featuresJson: JSON.stringify({ priority_support: true }) },
-  { id: "p_business", name: "Business", type: "paid", price: 79000, maxMerchants: 10, dailyPaidLimit: null, featuresJson: JSON.stringify({ priority_support: true, analytics: true }) },
+  {
+    id: "p_free",
+    name: "Free",
+    type: "free",
+    price: 0,
+    maxMerchants: 1,
+    dailyPaidLimit: 10,
+    featuresJson: null,
+  },
+  {
+    id: "p_starter",
+    name: "Starter",
+    type: "paid",
+    price: 49000,
+    maxMerchants: 3,
+    dailyPaidLimit: 50,
+    featuresJson: JSON.stringify({ priority_support: true }),
+  },
+  {
+    id: "p_business",
+    name: "Business",
+    type: "paid",
+    price: 79000,
+    maxMerchants: 10,
+    dailyPaidLimit: null,
+    featuresJson: JSON.stringify({ priority_support: true, analytics: true }),
+  },
 ];
 
 for (const p of plans) {
   const existing = await getPlan(db, p.id);
   if (existing) {
-    // Update value terbaru (harga/limit berubah dari seed sebelumnya)
     await updatePlan(db, p.id, {
       price: p.price,
       maxMerchants: p.maxMerchants,
@@ -67,24 +90,23 @@ for (const p of plans) {
   console.log(`plan ${p.id} dibuat`);
 }
 
-// ── Admin user (pengganti setup) ─────────────────────
-const adminUsername = process.env.ADMIN_USERNAME || "admin";
+// ── Admin user ──────────────────────────────────────
+const adminEmail = process.env.ADMIN_EMAIL || "admin@simpulpay.com";
 const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
-const existingAdmin = await getUserByUsername(db, adminUsername);
+const existingAdmin = await getUserByEmail(db, adminEmail);
 if (!existingAdmin) {
   await createUser(db, {
     id: crypto.randomUUID(),
-    username: adminUsername,
+    email: adminEmail,
     passwordHash: await hashPassword(adminPassword),
     role: "admin",
   });
-  console.log(`admin '${adminUsername}' dibuat`);
+  console.log(`admin '${adminEmail}' dibuat`);
 } else {
-  console.log(`admin '${adminUsername}' sudah ada`);
+  console.log(`admin '${adminEmail}' sudah ada`);
 }
 
 // ── System settings ───────────────────────────────────
-// maintenance: false default — toggle via admin POST /admin/maintenance
 await setSystemSetting(db, "maintenance", "false");
 console.log("system_settings maintenance=false (default)");
 

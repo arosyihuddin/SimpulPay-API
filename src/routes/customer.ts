@@ -4,6 +4,7 @@ import type { AppEnv } from "../types";
 import {
   me,
   changePassword,
+  updateProfile,
   dashboard,
   listLogsCtl,
   createQris,
@@ -49,6 +50,7 @@ const customerRoutes = new Hono<AppEnv>();
 const customerAuth = [cookieAuth, customerGuard] as const;
 
 customerRoutes.get("/me", ...customerAuth, me);
+customerRoutes.patch("/profile", ...customerAuth, updateProfile);
 customerRoutes.post("/change-password", ...customerAuth, changePassword);
 
 // Dashboard: butuh merchant (query/header)

@@ -69,3 +69,8 @@ export function cookieToken(c: Context): string | null {
   const raw = getCookie(c, ADMIN_COOKIE);
   return raw ? decodeURIComponent(raw) : null;
 }
+
+// cek email format minimal — cari @ + domain
+export function isValidEmail(e: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+}

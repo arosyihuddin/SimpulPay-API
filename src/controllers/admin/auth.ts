@@ -6,7 +6,7 @@ import {
 import {
   listUsers,
   getUserById,
-  getUserByUsername,
+  getUserByEmail,
   createUser,
   updateUser,
   deleteUser,
@@ -23,6 +23,7 @@ import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { Db, getDb } from "../../db/client";
 import { bad } from "./helpers";
+import { isValidEmail } from "../../utils/auth.helper";
 
 async function userBillingInfo(DB: Db, userId: string) {
   const sub = await getActiveSubscription(DB, userId);
@@ -71,7 +72,7 @@ export async function listUsersCtl(c: Context<AppEnv>) {
   const users = await Promise.all(
     (await listUsers(DB, limit, offset)).map(async (u) => ({
       id: u.id,
-      username: u.username,
+      email: u.email,
       role: u.role,
       status: u.status,
       created_at: u.created_at,
@@ -88,18 +89,18 @@ export async function listUsersCtl(c: Context<AppEnv>) {
 export async function createUserCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const body = await c.req.json();
-  const username = (body?.username || "").trim();
+  const email = (body?.email || "").trim().toLowerCase();
   const password = body?.password || "";
   const role = (body?.role || "customer").trim();
-  if (username.length < 3) bad("Username minimal 3 karakter");
+  if (!isValidEmail(email)) bad("Email tidak valid");
   if (password.length < 8) bad("Password minimal 8 karakter");
-  if (await getUserByUsername(DB, username)) bad("Username sudah dipakai", 409);
+  if (await getUserByEmail(DB, email)) bad("Email sudah dipakai", 409);
   if (!["admin", "customer"].includes(role))
     bad("Role harus 'admin' atau 'customer'");
   const id = crypto.randomUUID();
   await createUser(DB, {
     id,
-    username,
+    email,
     passwordHash: await hashPassword(password),
     role: role as "admin" | "customer",
   });
@@ -132,7 +133,7 @@ export async function createUserCtl(c: Context<AppEnv>) {
     DB,
     "INFO",
     "User dibuat: " +
-      username +
+      email +
       " (" +
       role +
       ")" +
@@ -148,17 +149,17 @@ export async function updateUserCtl(c: Context<AppEnv>) {
   if (!existing) bad("User tidak ditemukan", 404);
   const body = await c.req.json();
   const patch: {
-    username?: string;
+    email?: string;
     role?: "admin" | "customer";
     passwordHash?: string;
     status?: "active" | "suspended" | "banned";
   } = {};
-  if (body?.username !== undefined) {
-    const username = String(body.username).trim();
-    if (username.length < 3) bad("Username minimal 3 karakter");
-    const dup = await getUserByUsername(DB, username);
-    if (dup && dup.id !== id) bad("Username sudah dipakai", 409);
-    patch.username = username;
+  if (body?.email !== undefined) {
+    const email = String(body.email).trim().toLowerCase();
+    if (!isValidEmail(email)) bad("Email tidak valid");
+    const dup = await getUserByEmail(DB, email);
+    if (dup && dup.id !== id) bad("Email sudah dipakai", 409);
+    patch.email = email;
   }
   if (body?.role !== undefined) {
     const role = String(body.role).trim();
@@ -177,7 +178,7 @@ export async function updateUserCtl(c: Context<AppEnv>) {
     patch.passwordHash = await hashPassword(String(body.password));
   }
   await updateUser(DB, id, patch);
-  await insertLog(DB, "INFO", "User diubah: " + existing.username);
+  await insertLog(DB, "INFO", "User diubah: " + existing.email);
   return c.json({ success: true });
 }
 
@@ -190,6 +191,6 @@ export async function deleteUserCtl(c: Context<AppEnv>) {
   if (s?.user_id === id)
     bad("Tidak bisa menghapus akun yang sedang dipakai", 409);
   await deleteUser(DB, id);
-  await insertLog(DB, "INFO", "User dihapus: " + existing.username);
+  await insertLog(DB, "INFO", "User dihapus: " + existing.email);
   return c.json({ success: true });
 }

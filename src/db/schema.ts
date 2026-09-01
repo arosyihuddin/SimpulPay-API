@@ -94,8 +94,10 @@ export const adminSessions = pgTable("admin_sessions", {
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
-  username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
   password_hash: text("password_hash").notNull(),
+  name: text("name"),
+  phone: text("phone"),
   role: userRoleEnum("role").notNull().default("admin"),
   status: userStatusEnum("status").notNull().default("active"),
   created_at: bigint("created_at", { mode: "number" }).notNull(),
