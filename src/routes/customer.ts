@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { customerGuard, merchantGuard, cookieAuth } from "../middleware/guards";
+import { customerGuard, cookieAuth } from "../middleware/guards";
 import type { AppEnv } from "../types";
 import {
   me,
@@ -58,7 +58,6 @@ customerRoutes.post("/change-password", ...customerAuth, changePassword);
 customerRoutes.get("/dashboard", ...customerAuth, dashboard);
 customerRoutes.get("/top-merchants", ...customerAuth, topMerchantsCtl);
 customerRoutes.get("/logs", ...customerAuth, listLogsCtl);
-customerRoutes.post("/qris", ...customerAuth, merchantGuard, createQris);
 customerRoutes.get("/transactions", ...customerAuth, listTransactions);
 customerRoutes.get("/transactions/recent", ...customerAuth, recentTransactions);
 customerRoutes.get("/transactions/volume", ...customerAuth, transactionVolume);
@@ -87,6 +86,7 @@ customerRoutes.post(
   ...customerAuth,
   refreshSessionCtl,
 );
+customerRoutes.post("/merchants/:id/qris", ...customerAuth, createQris);
 // API keys
 customerRoutes.post("/api-keys", ...customerAuth, createApiKeyCtl);
 customerRoutes.get("/api-keys", ...customerAuth, listApiKeysCtl);

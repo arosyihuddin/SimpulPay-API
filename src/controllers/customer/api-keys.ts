@@ -3,12 +3,11 @@ import {
   deleteApiKey,
   listApiKeysByUser,
   insertLog,
-  getMerchant,
 } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
-import { bad, currentUserId, bufToHex } from "./helpers";
+import { bad, currentUserId, bufToHex, ownedActiveMerchant } from "./helpers";
 
 export async function createApiKeyCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
@@ -18,10 +17,7 @@ export async function createApiKeyCtl(c: Context<AppEnv>) {
   // merchant optional: kalau diisi, key terikat merchant itu; kalau kosong, v1 pilih random per generate.
   const merchantId = (body?.merchant_id as string) || null;
   if (merchantId) {
-    const merchant = await getMerchant(DB, merchantId);
-    if (!merchant || merchant.user_id !== userId)
-      bad("Merchant tidak ditemukan", 404);
-    if (merchant.status !== "active") bad("Merchant tidak aktif", 403);
+    await ownedActiveMerchant(DB, userId, merchantId);
   }
   const key =
     "gm_" + bufToHex(crypto.getRandomValues(new Uint8Array(32)).buffer);

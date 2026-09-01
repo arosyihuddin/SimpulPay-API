@@ -2,101 +2,14 @@ import {
   queryTransactions,
   countTransactions,
   markTransactionsExpired,
-  getMerchant,
   getTransaction,
-  insertTransaction,
-  insertLog,
   paidTransactionsInRange,
 } from "../../db/repositories";
 import type { TransactionStatus } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
-import { bad, currentUserId, reqMerchant } from "./helpers";
-import {
-  generateDynamicQRIS,
-  qrisExpiryMs,
-  uniqueAmount,
-  getQrisStatic,
-} from "../../services/qris";
-import { checkDailyPaidLimit } from "../../services/limits";
-import { broadcast } from "../../services/realtime";
-import { startPooling } from "../../services/pooling";
-
-/** Buat QRIS dinamis → insert transaksi. */
-export async function createQris(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const merchantId = reqMerchant(c);
-  const userId = currentUserId(c);
-  const body = await c.req.json();
-  const amount = body?.amount;
-  if (!amount || isNaN(Number(amount)) || Number(amount) <= 0)
-    bad("Nominal pembayaran tidak valid");
-  const staticTemplate = await getQrisStatic(DB, merchantId);
-  if (!staticTemplate)
-    bad(
-      "QRIS static belum dikonfigurasi. Upload QRIS static di Settings → Konfigurasi QRIS.",
-      500,
-    );
-  const blocked = await checkDailyPaidLimit(DB, merchantId);
-  if (blocked)
-    bad(
-      `Batas transaksi harian tercapai (${blocked.used}/${blocked.limit}). Silakan upgrade plan atau coba besok.`,
-      429,
-    );
-  const base = parseInt(String(amount), 10);
-  const { code, pay } = uniqueAmount(base);
-  const dynamicCode = generateDynamicQRIS(staticTemplate, pay);
-  const qrisId = Math.random().toString(36).substring(2, 10);
-  const trxId =
-    "TRX-" + Math.random().toString(36).substring(2, 10).toUpperCase();
-  const now = Date.now();
-  const expiresAt = now + qrisExpiryMs();
-  await insertTransaction(DB, {
-    id: qrisId,
-    code: dynamicCode!,
-    amount: pay,
-    baseAmount: base,
-    uniqueCode: code,
-    trxId,
-    merchantId,
-    userId,
-    createdAt: now,
-    expiresAt,
-  });
-  await insertLog(
-    DB,
-    "INFO",
-    "Admin buat QRIS | Merchant " +
-      merchantId +
-      " | TRX-ID: " +
-      trxId +
-      " | Rp " +
-      base +
-      " (+" +
-      code +
-      ")",
-  );
-  broadcast(c.env, {
-    type: "qris_created",
-    scope: "admin",
-    data: { id: qrisId, merchantId, status: "pending" },
-  });
-  // Pooling otomatis: poll GoBiz sampai transaksi ini (dan pending lain merchant itu) lunas/expired.
-  c.executionCtx.waitUntil(startPooling(c.env, merchantId, userId));
-  return c.json({
-    success: true,
-    data: {
-      qris_id: qrisId,
-      trx_id: trxId,
-      qris_code: dynamicCode,
-      amount: base,
-      unique_code: code,
-      amount_to_pay: pay,
-      expires_at: new Date(expiresAt).toISOString(),
-    },
-  });
-}
+import { bad, currentUserId, ownedMerchant } from "./helpers";
 
 /** Transaksi LOKAL — gabungan semua merchant user, filter status/merchant. */
 export async function listTransactions(c: Context<AppEnv>) {
@@ -107,10 +20,7 @@ export async function listTransactions(c: Context<AppEnv>) {
   const offset = parseInt((q.offset as string) || "0", 10);
   const status = (q.status as TransactionStatus | undefined) || undefined;
   const merchantId = (q.merchant_id as string) || undefined;
-  if (merchantId) {
-    const m = await getMerchant(DB, merchantId);
-    if (!m || m.user_id !== userId) bad("Merchant tidak ditemukan", 404);
-  }
+  if (merchantId) await ownedMerchant(DB, userId, merchantId);
   const opts = { limit, offset, status, merchantId, userId };
   await markTransactionsExpired(DB, Date.now());
   const rows = await queryTransactions(DB, opts);
@@ -137,8 +47,7 @@ export async function getTransactionCode(c: Context<AppEnv>) {
   const id = c.req.param("id") ?? "";
   const tx = await getTransaction(DB, id);
   if (!tx || !tx.merchant_id) bad("Transaksi tidak ditemukan", 404);
-  const m = await getMerchant(DB, tx.merchant_id);
-  if (!m || m.user_id !== userId) bad("Akses ditolak", 403);
+  await ownedMerchant(DB, userId, tx.merchant_id);
   return c.json({
     success: true,
     data: { code: tx.code, status: tx.status },

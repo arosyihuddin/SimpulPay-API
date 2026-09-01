@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import type { Db } from "../../db/client";
 import type { AppEnv } from "../../types";
 import { fetchTransactionsWithRetry } from "../../services/gojek";
+import { getMerchantByUser } from "../../db/repositories";
 import { ADMIN_TTL_MS } from "../../middleware/guards";
 
 export const SESSION_MAX_AGE = ADMIN_TTL_MS / 1000;
@@ -18,11 +19,22 @@ export function bad(message: string, status = 400): never {
   throw err;
 }
 
-/** Ambil merchantId dari context (harus sudah lewat merchantGuard). */
-export function reqMerchant(c: Context<AppEnv>): string {
-  const id = c.get("merchantId");
-  if (!id) bad("merchant_id tidak ditemukan di context", 400);
-  return id;
+/** Merchant milik user dari :id — tanpa cek status (update/delete/relogin merchant inactive). */
+export async function ownedMerchant(DB: Db, userId: string, merchantId: string) {
+  const m = await getMerchantByUser(DB, userId, merchantId);
+  if (!m) bad("Merchant tidak ditemukan", 404);
+  return m;
+}
+
+/** Merchant milik user dari :id + cek status aktif. */
+export async function ownedActiveMerchant(
+  DB: Db,
+  userId: string,
+  merchantId: string,
+) {
+  const m = await ownedMerchant(DB, userId, merchantId);
+  if (m.status !== "active") bad("Merchant tidak aktif", 403);
+  return m;
 }
 
 export function currentUserId(c: Context<AppEnv>): string {

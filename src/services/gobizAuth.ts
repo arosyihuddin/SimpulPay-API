@@ -164,12 +164,12 @@ export async function verifyOtp(
       throw err;
     }
     await saveSession(DB, merchantId, session);
-    if (gopayMerchantId || outletName) {
-      await updateMerchant(DB, merchantId, {
-        gopayMerchantId: gopayMerchantId,
-        name: outletName ?? undefined,
-      });
-    }
+    // Login OTP sukses = sesi GoBiz valid lagi → reaktivasi merchant.
+    await updateMerchant(DB, merchantId, {
+      gopayMerchantId: gopayMerchantId,
+      name: outletName ?? undefined,
+      status: "active",
+    });
   }
   return session;
 }

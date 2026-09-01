@@ -3,6 +3,7 @@ import {
   updateTransactionStatus,
   updateInvoiceByTransaction,
   getUserSettings,
+  getMerchant,
 } from "../db/repositories";
 import { verifyPayment } from "./gojek";
 import { broadcast } from "./realtime";
@@ -32,7 +33,6 @@ export async function runPooling(env: Env, merchantId: string, userId: string) {
         status: "pending",
         limit: 100,
       });
-      console.log(rows);
       if (rows.length === 0) break;
       let alive = 0;
       const now = Date.now();
@@ -62,6 +62,12 @@ export async function runPooling(env: Env, merchantId: string, userId: string) {
             });
           }
         } catch {
+          // Sesi GoBiz invalid (merchant jadi inactive) → hentikan pooling.
+          const m = await getMerchant(DB, merchantId);
+          if (!m || m.status !== "active") {
+            console.debug(`Pooling merchant ${merchantId} berhenti (sesi invalid)`);
+            return;
+          }
           // sesi expired / jaringan error → coba lagi iterasi berikutnya
         }
       }

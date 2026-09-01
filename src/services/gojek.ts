@@ -1,5 +1,12 @@
 import { getValidHeaders, refreshSession } from "./sessionManager";
-import { claimTx, getClaim, getMerchant, insertLog, insertNotification } from "../db/repositories";
+import {
+  claimTx,
+  getClaim,
+  getMerchant,
+  updateMerchant,
+  insertLog,
+  insertNotification,
+} from "../db/repositories";
 import { getMerchantId } from "./qris";
 import { checkDailyPaidLimit } from "./limits";
 import { sendWebhook } from "./webhook";
@@ -79,6 +86,12 @@ export async function fetchTransactionsWithRetry(
 ): Promise<any[]> {
   const headers = await getValidHeaders(DB, merchantId, opts.userAgent);
   if (!headers) {
+    await updateMerchant(DB, merchantId, { status: "inactive" });
+    await insertLog(
+      DB,
+      "WARNING",
+      `Sesi GoPay tidak valid, merchant ${merchantId} dinonaktifkan`,
+    );
     throw new Error(
       "Sesi GoPay belum ada. Login OTP lewat dashboard (Settings → Login GoBiz).",
     );
@@ -135,6 +148,12 @@ export async function fetchTransactionsWithRetry(
           );
           return await fetchPage(newHeaders!, from);
         }
+        await updateMerchant(DB, merchantId, { status: "inactive" });
+        await insertLog(
+          DB,
+          "WARNING",
+          `Auto-refresh sesi gagal (401), merchant ${merchantId} dinonaktifkan`,
+        );
       }
       throw firstErr;
     }

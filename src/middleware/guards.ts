@@ -3,7 +3,6 @@ import {
   cleanExpiredSessions,
   getAdminSession,
   getApiKeyByKey,
-  getMerchant,
   getSystemSetting,
   updateApiKey,
 } from "../db/repositories";
@@ -91,24 +90,6 @@ export const customerGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
     fail(401, "Tidak terautentikasi atau sesi berakhir");
   c.set("userId", userId);
   c.set("role", user.role);
-  await next();
-};
-
-/**
- * Resolve merchant dari query `merchant_id` atau header `x-merchant-id`,
- * pastikan milik user login (userId) dan status active. Set c.get("merchantId").
- */
-export const merchantGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const merchantId =
-    c.req.query("merchant_id") || c.req.header("x-merchant-id") || null;
-  if (!merchantId)
-    fail(400, "merchant_id wajib (query atau header x-merchant-id)");
-  const merchant = await getMerchant(getDb(c), merchantId);
-  if (!merchant) fail(404, "Merchant tidak ditemukan");
-  if (merchant.user_id !== c.get("userId"))
-    fail(403, "Akses ditolak: merchant bukan milik akun ini");
-  if (merchant.status !== "active") fail(403, "Merchant tidak aktif");
-  c.set("merchantId", merchantId);
   await next();
 };
 

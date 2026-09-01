@@ -1,13 +1,12 @@
 import {
   createMerchant,
-  getMerchant,
   listMerchantsByUser,
   countMerchantsByUser,
   updateMerchant,
   deleteMerchant,
   insertLog,
   getActivePlanForUser,
-  getMerchantByUser,
+  insertTransaction,
 } from "../../db/repositories";
 import {
   requestOtp,
@@ -15,22 +14,22 @@ import {
   normalizePhone,
 } from "../../services/gobizAuth";
 import { loadSession, refreshSession } from "../../services/sessionManager";
-import { parseQrisTlv } from "../../services/qris";
+import {
+  parseQrisTlv,
+  generateDynamicQRIS,
+  qrisExpiryMs,
+  uniqueAmount,
+  getQrisStatic,
+} from "../../services/qris";
 import { decodeQRCodeFromImage } from "../../services/qrDecoder";
 import { formatTransaction } from "../../services/gojek";
+import { checkDailyPaidLimit } from "../../services/limits";
+import { broadcast } from "../../services/realtime";
+import { startPooling } from "../../services/pooling";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
-import type { Db } from "../../db/client";
 import { getDb } from "../../db/client";
-import { bad, currentUserId, paramId, fetchMonthTransactions } from "./helpers";
-
-/** Ambil merchant milik user dari :id path, cek status aktif. */
-async function ownedActiveMerchant(DB: Db, userId: string, merchantId: string) {
-  const m = await getMerchantByUser(DB, userId, merchantId);
-  if (!m) bad("Merchant tidak ditemukan", 404);
-  if (m.status !== "active") bad("Merchant tidak aktif", 403);
-  return m;
-}
+import { bad, currentUserId, paramId, fetchMonthTransactions, ownedActiveMerchant, ownedMerchant } from "./helpers";
 
 export async function createMerchantCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
@@ -116,9 +115,7 @@ export async function updateMerchantCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
   const id = c.req.param("id") ?? "";
-  const merchant = await getMerchant(DB, id);
-  if (!merchant) bad("Merchant tidak ditemukan", 404);
-  if (merchant.user_id !== userId) bad("Akses ditolak", 403);
+  const merchant = await ownedMerchant(DB, userId, id);
   const body = await c.req.json();
   const patch: Record<string, unknown> = {};
   if (body?.name !== undefined) {
@@ -159,9 +156,7 @@ export async function deleteMerchantCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
   const id = c.req.param("id") ?? "";
-  const merchant = await getMerchant(DB, id);
-  if (!merchant) bad("Merchant tidak ditemukan", 404);
-  if (merchant.user_id !== userId) bad("Akses ditolak", 403);
+  const merchant = await ownedMerchant(DB, userId, id);
   await deleteMerchant(DB, id);
   await insertLog(
     DB,
@@ -171,6 +166,82 @@ export async function deleteMerchantCtl(c: Context<AppEnv>) {
     userId,
   );
   return c.json({ success: true });
+}
+
+/** Buat QRIS dinamis → insert transaksi. Butuh merchant aktif milik user (dari :id path). */
+export async function createQris(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  const merchantId = paramId(c);
+  const merchant = await ownedActiveMerchant(DB, userId, merchantId);
+  const body = await c.req.json();
+  const amount = body?.amount;
+  if (!amount || isNaN(Number(amount)) || Number(amount) <= 0)
+    bad("Nominal pembayaran tidak valid");
+  const staticTemplate = await getQrisStatic(DB, merchant.id);
+  if (!staticTemplate)
+    bad(
+      "QRIS static belum dikonfigurasi. Upload QRIS static di Settings → Konfigurasi QRIS.",
+      500,
+    );
+  const blocked = await checkDailyPaidLimit(DB, merchant.id);
+  if (blocked)
+    bad(
+      `Batas transaksi harian tercapai (${blocked.used}/${blocked.limit}). Silakan upgrade plan atau coba besok.`,
+      429,
+    );
+  const base = parseInt(String(amount), 10);
+  const { code, pay } = uniqueAmount(base);
+  const dynamicCode = generateDynamicQRIS(staticTemplate, pay);
+  const qrisId = Math.random().toString(36).substring(2, 10);
+  const trxId =
+    "TRX-" + Math.random().toString(36).substring(2, 10).toUpperCase();
+  const now = Date.now();
+  const expiresAt = now + qrisExpiryMs();
+  await insertTransaction(DB, {
+    id: qrisId,
+    code: dynamicCode!,
+    amount: pay,
+    baseAmount: base,
+    uniqueCode: code,
+    trxId,
+    merchantId: merchant.id,
+    userId,
+    createdAt: now,
+    expiresAt,
+  });
+  await insertLog(
+    DB,
+    "INFO",
+    "Admin buat QRIS | Merchant " +
+      merchant.id +
+      " | TRX-ID: " +
+      trxId +
+      " | Rp " +
+      base +
+      " (+" +
+      code +
+      ")",
+  );
+  broadcast(c.env, {
+    type: "qris_created",
+    scope: "admin",
+    data: { id: qrisId, merchantId: merchant.id, status: "pending" },
+  });
+  // Pooling otomatis: poll GoBiz sampai transaksi ini (dan pending lain merchant itu) lunas/expired.
+  c.executionCtx.waitUntil(startPooling(c.env, merchant.id, userId));
+  return c.json({
+    success: true,
+    data: {
+      qris_id: qrisId,
+      trx_id: trxId,
+      qris_code: dynamicCode,
+      amount: base,
+      unique_code: code,
+      amount_to_pay: pay,
+      expires_at: new Date(expiresAt).toISOString(),
+    },
+  });
 }
 
 export async function qrisParse(c: Context<AppEnv>) {
@@ -224,7 +295,7 @@ export async function otpRequest(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
   const merchantId = paramId(c);
-  await ownedActiveMerchant(DB, userId, merchantId);
+  await ownedMerchant(DB, userId, merchantId);
   const body = await c.req.json();
   if (!body?.phone) bad("Nomor HP wajib diisi");
   const { otpToken, expiresIn, uniqueId } = await requestOtp(body.phone);
@@ -245,7 +316,7 @@ export async function otpVerify(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
   const merchantId = paramId(c);
-  const merchant = await ownedActiveMerchant(DB, userId, merchantId);
+  const merchant = await ownedMerchant(DB, userId, merchantId);
   const body = await c.req.json();
   if (!body?.phone || !body?.otp || !body?.otp_token)
     bad("phone, otp, otp_token wajib diisi");
@@ -300,16 +371,14 @@ export async function refreshSessionCtl(c: Context<AppEnv>) {
   return c.json({ success: true, data: { expires_at: refreshed.expires_at } });
 }
 
-/** Transaksi LIVE GoBiz — detail per merchant, butuh merchant milik user. */
+/** Transaksi LIVE GoBiz — detail per merchant, butuh merchant aktif milik user. */
 export async function merchantTransactions(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
   const merchantId = paramId(c);
-  const merchant = await getMerchant(DB, merchantId);
-  if (!merchant || merchant.user_id !== userId)
-    bad("Merchant tidak ditemukan", 404);
+  const merchant = await ownedActiveMerchant(DB, userId, merchantId);
   const q = c.req.query();
-  const tx = await fetchMonthTransactions(DB, merchantId);
+  const tx = await fetchMonthTransactions(DB, merchant.id);
   if (!tx.success) return c.json({ success: false, message: tx.message });
   const total = tx.raw.length;
   const pageSize = parseInt((q.pageSize as string) || "20", 10);
