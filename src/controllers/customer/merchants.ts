@@ -190,8 +190,8 @@ export async function createQris(c: Context<AppEnv>) {
       403,
     );
   const body = await c.req.json();
-  const amount = body?.amount;
-  if (!amount || isNaN(Number(amount)) || Number(amount) <= 0)
+  const base = parseInt(String(body?.amount ?? ""), 10);
+  if (Number.isNaN(base) || base <= 0)
     bad("Nominal pembayaran tidak valid");
   const staticTemplate = await getQrisStatic(DB, merchant.id);
   if (!staticTemplate)
@@ -205,7 +205,6 @@ export async function createQris(c: Context<AppEnv>) {
       `Batas transaksi harian tercapai (${blocked.used}/${blocked.limit}). Silakan upgrade plan atau coba besok.`,
       429,
     );
-  const base = parseInt(String(amount), 10);
   const { code, pay } = uniqueAmount(base);
   const dynamicCode = generateDynamicQRIS(staticTemplate, pay);
   const qrisId = Math.random().toString(36).substring(2, 10);
