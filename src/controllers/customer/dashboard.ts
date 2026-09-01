@@ -2,6 +2,7 @@ import {
   markTransactionsExpired,
   queryTransactions,
   paidIncomeByMerchant,
+  topPaidTransactionsByMerchant,
 } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
@@ -46,6 +47,24 @@ export async function dashboard(c: Context<AppEnv>) {
       },
       top_merchants: topMerchants,
       month_fetch_error: null,
+    },
+  });
+}
+
+/** Top merchant by jumlah transaksi PAID bulan ini. */
+export async function topMerchantsCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const userId = currentUserId(c);
+  const d = new Date();
+  const from = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+  const to = Date.now();
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "5", 10) || 5, 50);
+  const top = await topPaidTransactionsByMerchant(DB, { from, to, userId, limit });
+  return c.json({
+    success: true,
+    data: {
+      period: { from, to },
+      merchants: top.map((m, i) => ({ rank: i + 1, ...m })),
     },
   });
 }

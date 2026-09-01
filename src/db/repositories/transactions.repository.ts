@@ -125,6 +125,38 @@ export async function paidIncomeByMerchant(
   }));
 }
 
+/** Top merchant by jumlah transaksi PAID dalam range, diurutkan terbanyak → paling sedikit. */
+export async function topPaidTransactionsByMerchant(
+  db: Db,
+  opts: { from: number; to: number; userId?: string; limit?: number },
+): Promise<
+  Array<{ merchant_id: string; merchant_name: string | null; total_transactions: number }>
+> {
+  const conds = [
+    eq(transactions.status, "PAID"),
+    gte(transactions.created_at, opts.from),
+    lte(transactions.created_at, opts.to),
+  ];
+  if (opts.userId) conds.push(eq(transactions.user_id, opts.userId));
+  const rows = await db
+    .select({
+      merchant_id: transactions.merchant_id,
+      merchant_name: merchants.name,
+      total_transactions: sql<number>`count(*)::int`,
+    })
+    .from(transactions)
+    .leftJoin(merchants, eq(transactions.merchant_id, merchants.id))
+    .where(and(...conds))
+    .groupBy(transactions.merchant_id, merchants.name)
+    .orderBy(desc(sql`count(*)`))
+    .limit(opts.limit ?? 5);
+  return rows.map((r) => ({
+    merchant_id: r.merchant_id ?? "",
+    merchant_name: r.merchant_name,
+    total_transactions: Number(r.total_transactions ?? 0),
+  }));
+}
+
 export async function markTransactionsExpired(db: Db, now = Date.now(), merchantId?: string) {
   const conds: any[] = [and(eq(transactions.status, "PENDING"), lt(transactions.expires_at, now))];
   if (merchantId) conds.push(eq(transactions.merchant_id, merchantId));
