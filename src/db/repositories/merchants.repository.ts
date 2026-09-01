@@ -1,5 +1,5 @@
-import { eq, desc, sql, and } from "drizzle-orm";
-import { merchants, claims } from "../schema";
+import { eq, desc, sql, and, isNotNull } from "drizzle-orm";
+import { merchants, claims, users } from "../schema";
 import type { Db } from "../client";
 
 export type MerchantRow = typeof merchants.$inferSelect;
@@ -127,4 +127,21 @@ export async function deleteMerchant(db: Db, id: string) {
 
 export async function listAllMerchants(db: Db): Promise<MerchantRow[]> {
   return db.select().from(merchants).orderBy(desc(merchants.created_at));
+}
+
+/** Merchant pembayaran platform (milik user admin, aktif, QRIS static siap). */
+export async function getAdminPaymentMerchant(db: Db): Promise<MerchantRow | null> {
+  const rows = await db
+    .select({ m: merchants })
+    .from(merchants)
+    .innerJoin(users, eq(users.id, merchants.user_id))
+    .where(
+      and(
+        eq(users.role, "admin"),
+        eq(merchants.status, "active"),
+        isNotNull(merchants.qris_static),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.m ?? null;
 }

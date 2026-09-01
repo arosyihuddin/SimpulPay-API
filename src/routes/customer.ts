@@ -30,12 +30,13 @@ import {
   markNotificationReadCtl,
   listAnnouncementsCtl,
   getAnnouncementCtl,
-  listPlansCtl,
-  getPlanCtl,
-  getMySubscriptionCtl,
-  createSubscriptionCtl,
-  listMyInvoicesCtl,
 } from "../controllers/customer";
+import { listPlansCtl, getPlanCtl } from "../controllers/customer/plans.controller";
+import {
+  listMySubscriptionsCtl,
+  createSubscriptionCtl,
+} from "../controllers/customer/subscriptions.controller";
+import { listMyInvoicesCtl } from "../controllers/customer/invoices.controller";
 
 // Customer gak masuk spec OpenAPI (swagger cuma untuk API v1) — pakai Hono biasa.
 const customerRoutes = new Hono<AppEnv>();
@@ -98,7 +99,7 @@ customerRoutes.get("/settings", ...customerAuth, merchantGuard, settings);
 // Billing: customer baca plan, self-service subscribe
 customerRoutes.get("/plans", ...customerAuth, listPlansCtl);
 customerRoutes.get("/plans/:id", ...customerAuth, getPlanCtl);
-customerRoutes.get("/subscriptions", ...customerAuth, getMySubscriptionCtl);
+customerRoutes.get("/subscriptions", ...customerAuth, listMySubscriptionsCtl);
 customerRoutes.post("/subscriptions", ...customerAuth, createSubscriptionCtl);
 customerRoutes.get("/invoices", ...customerAuth, listMyInvoicesCtl);
 

@@ -14,6 +14,7 @@ export async function insertTransaction(
     uniqueCode: number;
     trxId: string;
     merchantId: string;
+    userId: string;
     createdAt: number;
     expiresAt: number;
   },
@@ -26,6 +27,7 @@ export async function insertTransaction(
     unique_code: r.uniqueCode,
     trx_id: r.trxId,
     merchant_id: r.merchantId,
+    user_id: r.userId,
     status: "PENDING",
     created_at: r.createdAt,
     expires_at: r.expiresAt,
@@ -37,17 +39,22 @@ export async function getTransaction(db: Db, id: string): Promise<TransactionRow
   return rows[0] ?? null;
 }
 
+export async function updateTransactionStatus(db: Db, id: string, status: string) {
+  await db.update(transactions).set({ status }).where(eq(transactions.id, id));
+}
+
 export type TransactionWithMerchant = TransactionRow & {
   merchant_name: string | null;
 };
 
 export async function queryTransactions(
   db: Db,
-  opts: { limit?: number; offset?: number; merchantId?: string; status?: string } = {},
+  opts: { limit?: number; offset?: number; merchantId?: string; userId?: string; status?: string } = {},
 ): Promise<TransactionWithMerchant[]> {
-  const { limit = 50, offset = 0, merchantId, status } = opts;
+  const { limit = 50, offset = 0, merchantId, userId, status } = opts;
   const conds = [];
   if (merchantId) conds.push(eq(transactions.merchant_id, merchantId));
+  if (userId) conds.push(eq(transactions.user_id, userId));
   if (status) conds.push(eq(transactions.status, status));
   const rows = await db
     .select({ t: transactions, m: merchants })
@@ -62,11 +69,12 @@ export async function queryTransactions(
 
 export async function countTransactions(
   db: Db,
-  opts: { merchantId?: string; status?: string } = {},
+  opts: { merchantId?: string; userId?: string; status?: string } = {},
 ): Promise<number> {
-  const { merchantId, status } = opts;
+  const { merchantId, userId, status } = opts;
   const conds = [];
   if (merchantId) conds.push(eq(transactions.merchant_id, merchantId));
+  if (userId) conds.push(eq(transactions.user_id, userId));
   if (status) conds.push(eq(transactions.status, status));
   const r = await db
     .select({ c: sql<number>`count(*)::int` })
@@ -77,13 +85,14 @@ export async function countTransactions(
 
 export async function paidTransactionsInRange(
   db: Db,
-  opts: { from: number; to: number },
+  opts: { from: number; to: number; userId?: string },
 ): Promise<Array<{ amount: number; created_at: number }>> {
   const conds = [
     eq(transactions.status, "PAID"),
     gte(transactions.created_at, opts.from),
     lte(transactions.created_at, opts.to),
   ];
+  if (opts.userId) conds.push(eq(transactions.user_id, opts.userId));
   return db
     .select({ amount: transactions.amount, created_at: transactions.created_at })
     .from(transactions)
@@ -94,7 +103,10 @@ export async function paidTransactionsInRange(
 export async function paidIncomeByMerchant(
   db: Db,
   from: number,
+  userId?: string,
 ): Promise<Array<{ merchant_id: string; merchant_name: string | null; total: number }>> {
+  const conds = [eq(transactions.status, "PAID"), gte(transactions.created_at, from)];
+  if (userId) conds.push(eq(transactions.user_id, userId));
   const rows = await db
     .select({
       merchant_id: transactions.merchant_id,
@@ -103,12 +115,7 @@ export async function paidIncomeByMerchant(
     })
     .from(transactions)
     .leftJoin(merchants, eq(transactions.merchant_id, merchants.id))
-    .where(
-      and(
-        eq(transactions.status, "PAID"),
-        gte(transactions.created_at, from),
-      ),
-    )
+    .where(and(...conds))
     .groupBy(transactions.merchant_id, merchants.name)
     .orderBy(desc(sql`sum(${transactions.amount})`));
   return rows.map((r) => ({

@@ -6,11 +6,13 @@ import {
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
+import { currentUserId } from "./helpers";
 
 export async function dashboard(c: Context<AppEnv>) {
   const DB = getDb(c);
+  const userId = currentUserId(c);
   await markTransactionsExpired(DB, Date.now());
-  const all = await queryTransactions(DB, { limit: 100 });
+  const all = await queryTransactions(DB, { limit: 100, userId });
   const now = Date.now();
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -25,7 +27,7 @@ export async function dashboard(c: Context<AppEnv>) {
   const activeQris = all.filter(
     (q) => q.status === "PENDING" && q.expires_at > now,
   ).length;
-  const merchantIncome = await paidIncomeByMerchant(DB, monthStart.getTime());
+  const merchantIncome = await paidIncomeByMerchant(DB, monthStart.getTime(), userId);
   const topMerchants = merchantIncome.slice(0, 5).map((m, i) => ({
     rank: i + 1,
     merchant_id: m.merchant_id,

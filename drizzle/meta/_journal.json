@@ -57,6 +57,27 @@
       "when": 1788192170048,
       "tag": "0007_illegal_psynapse",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788202734000,
+      "tag": "0008_sad_bloodstrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788231102852,
+      "tag": "0009_swift_killmonger",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788231769180,
+      "tag": "0010_cultured_sway",
+      "breakpoints": true
     }
   ]
 }

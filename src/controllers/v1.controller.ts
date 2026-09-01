@@ -80,6 +80,7 @@ export async function createQris(c: Context<AppEnv>) {
     uniqueCode: code,
     trxId,
     merchantId,
+    userId,
     createdAt: now,
     expiresAt,
   });
@@ -101,9 +102,14 @@ export async function createQris(c: Context<AppEnv>) {
 
 export async function getQris(c: Context<AppEnv>) {
   const DB = getDb(c);
+  const userId = c.get("userId");
+  if (!userId) fail(500, "userId tidak ditemukan di context");
   const id = c.req.param("id") ?? "";
   const qris = await getTransaction(DB, id);
-  if (!qris) fail(404, "QRIS tidak ditemukan");
+  if (!qris || !qris.merchant_id) fail(404, "QRIS tidak ditemukan");
+  // Verifikasi ownership: transaksi punya merchant milik user ini.
+  const m = await getMerchant(DB, qris.merchant_id);
+  if (!m || m.user_id !== userId) fail(404, "QRIS tidak ditemukan");
   const expired = Date.now() > qris.expires_at;
   if (expired) await markTransactionsExpired(DB, Date.now(), qris.merchant_id ?? undefined);
   return c.json(

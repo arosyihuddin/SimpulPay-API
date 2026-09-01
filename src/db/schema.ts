@@ -24,6 +24,7 @@ export const apiKeyStatusEnum = pgEnum("api_key_status", ["active", "revoked"]);
 export const planTypeEnum = pgEnum("plan_type", ["free", "paid"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "active",
+  "pending",
   "cancelled",
   "expired",
 ]);
@@ -42,8 +43,8 @@ export const transactions = pgTable("transactions", {
   unique_code: integer("unique_code").notNull().default(0),
   trx_id: text("trx_id").notNull(),
   status: text("status").notNull().default("PENDING"),
-  transaction_json: text("transaction_json"),
   merchant_id: text("merchant_id").references(() => merchants.id),
+  user_id: text("user_id").references(() => users.id),
   created_at: bigint("created_at", { mode: "number" }).notNull(),
   expires_at: bigint("expires_at", { mode: "number" }).notNull(),
 });
@@ -174,6 +175,7 @@ export const invoices = pgTable("invoices", {
   subscription_id: text("subscription_id")
     .notNull()
     .references(() => subscriptions.id),
+  transaction_id: text("transaction_id").references(() => transactions.id),
   amount: integer("amount").notNull(),
   status: invoiceStatusEnum("status").notNull().default("pending"),
   period_start: bigint("period_start", { mode: "number" }).notNull(),

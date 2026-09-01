@@ -7,4 +7,6 @@ export * from "./merchants";
 export * from "./api-keys";
 export * from "./notifications";
 export * from "./announcements";
-export * from "./billing";
+export * from "./subscriptions.controller";
+export * from "./invoices.controller";
+export * from "./plans.controller";

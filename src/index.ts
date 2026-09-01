@@ -15,6 +15,8 @@ import {
   listActiveSubscriptions,
   createInvoice,
   getPlan,
+  listStalePendingSubscriptions,
+  updateSubscription,
 } from "./db/repositories";
 import {
   loadSession,
@@ -112,6 +114,12 @@ export default {
         // expired per merchant
         const merchants = await listAllMerchants(DB);
         for (const m of merchants) await markTransactionsExpired(DB, Date.now(), m.id);
+        // pending sub >24 jam belum bayar → cancel
+        const stale = await listStalePendingSubscriptions(DB, Date.now() - 24 * 60 * 60 * 1000);
+        for (const s of stale) {
+          await updateSubscription(DB, s.id, { status: "cancelled" });
+          await insertLog(DB, "INFO", `Stale pending sub ${s.id} dibatalkan (24h)`, null, s.user_id);
+        }
       } catch (err) {
         console.error("[cron] Gagal cleanup:", (err as Error).message);
       }

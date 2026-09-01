@@ -12,13 +12,18 @@ import {
   createPlanCtl,
   updatePlanCtl,
   deletePlanCtl,
+} from "../controllers/admin/plans.controller";
+import {
   listSubscriptionsCtl,
   getSubscriptionCtl,
   cancelSubscriptionCtl,
+} from "../controllers/admin/subscriptions.controller";
+import {
   listInvoicesCtl,
   getInvoiceCtl,
   markInvoicePaidCtl,
-} from "../controllers/admin/billing";
+  rejectInvoiceCtl,
+} from "../controllers/admin/invoices.controller";
 import {
   createAnnouncementCtl,
   updateAnnouncementCtl,
@@ -29,7 +34,7 @@ import {
   listAnnouncementsCtl,
   getAnnouncementCtl,
 } from "../controllers/customer/announcements";
-import { listPlansCtl, getPlanCtl } from "../controllers/customer/billing";
+import { listPlansCtl, getPlanCtl } from "../controllers/customer/plans.controller";
 
 // Admin gak masuk spec OpenAPI (swagger cuma untuk API v1) — pakai Hono biasa.
 const adminRoutes = new Hono<AppEnv>();
@@ -61,5 +66,6 @@ adminRoutes.post(
 adminRoutes.get("/invoices", ...adminAuth, listInvoicesCtl);
 adminRoutes.get("/invoices/:id", ...adminAuth, getInvoiceCtl);
 adminRoutes.post("/invoices/:id/paid", ...adminAuth, markInvoicePaidCtl);
+adminRoutes.post("/invoices/:id/reject", ...adminAuth, rejectInvoiceCtl);
 
 export { adminRoutes };

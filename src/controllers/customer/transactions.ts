@@ -25,6 +25,7 @@ import { broadcast } from "../../services/realtime";
 export async function createQris(c: Context<AppEnv>) {
   const DB = getDb(c);
   const merchantId = reqMerchant(c);
+  const userId = currentUserId(c);
   const body = await c.req.json();
   const amount = body?.amount;
   if (!amount || isNaN(Number(amount)) || Number(amount) <= 0)
@@ -57,6 +58,7 @@ export async function createQris(c: Context<AppEnv>) {
     uniqueCode: code,
     trxId,
     merchantId,
+    userId,
     createdAt: now,
     expiresAt,
   });
@@ -105,10 +107,10 @@ export async function listTransactions(c: Context<AppEnv>) {
     const m = await getMerchant(DB, merchantId);
     if (!m || m.user_id !== userId) bad("Merchant tidak ditemukan", 404);
   }
-  const opts = { limit, offset, status, merchantId };
+  const opts = { limit, offset, status, merchantId, userId };
   await markTransactionsExpired(DB, Date.now());
   const rows = await queryTransactions(DB, opts);
-  const total = await countTransactions(DB, { status, merchantId });
+  const total = await countTransactions(DB, { status, merchantId, userId });
   const txns = rows.map((t) => ({
     id: t.id,
     trx_id: t.trx_id,
@@ -145,7 +147,7 @@ export async function recentTransactions(c: Context<AppEnv>) {
   const userId = currentUserId(c);
   const q = c.req.query();
   const limit = Math.min(parseInt((q.limit as string) || "5", 10), 20);
-  const rows = await queryTransactions(DB, { limit });
+  const rows = await queryTransactions(DB, { limit, userId });
   const txns = rows.map((t) => ({
     id: t.id,
     trx_id: t.trx_id,
@@ -203,7 +205,8 @@ export async function transactionVolume(c: Context<AppEnv>) {
 
   const from = buckets[0].from;
   const to = buckets[buckets.length - 1].to;
-  const paid = await paidTransactionsInRange(DB, { from, to });
+  const userId = currentUserId(c);
+  const paid = await paidTransactionsInRange(DB, { from, to, userId });
 
   const data = buckets.map(
     (b) =>
