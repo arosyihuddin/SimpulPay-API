@@ -13,3 +13,4 @@ export * from "./subscriptions.repository";
 export * from "./invoices.repository";
 export * from "./userSettings.repository";
 export * from "./systemSettings.repository";
+export * from "./announcementReads.repository";

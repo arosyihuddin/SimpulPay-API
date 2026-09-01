@@ -7,6 +7,7 @@ import {
   boolean,
   pgEnum,
   jsonb,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "customer"]);
@@ -169,6 +170,22 @@ export const announcements = pgTable("announcements", {
   active: boolean("active").notNull().default(true),
   created_at: bigint("created_at", { mode: "number" }).notNull(),
 });
+
+// Baca/dismiss announcement per user (banner hide). Broadcast tetap 1 row,
+// read state user disimpen di sini, bukan di announcements.
+export const announcementReads = pgTable(
+  "announcement_reads",
+  {
+    announcement_id: bigint("announcement_id", { mode: "number" })
+      .notNull()
+      .references(() => announcements.id),
+    user_id: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    read_at: bigint("read_at", { mode: "number" }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.announcement_id, t.user_id] })],
+);
 
 export const invoices = pgTable("invoices", {
   id: text("id").primaryKey(),

@@ -32,6 +32,7 @@ import {
   listNotificationsCtl,
   markNotificationReadCtl,
   listAnnouncementsCtl,
+  markAnnouncementReadCtl,
 } from "../controllers/customer";
 import {
   listPlansCtl,
@@ -111,7 +112,12 @@ customerRoutes.get("/subscriptions", ...customerAuth, listMySubscriptionsCtl);
 customerRoutes.post("/subscriptions", ...customerAuth, createSubscriptionCtl);
 customerRoutes.get("/invoices", ...customerAuth, listMyInvoicesCtl);
 
-// Announcements: baca broadcast
+// Announcements: baca broadcast + dismiss/hide banner per user
 customerRoutes.get("/announcements", ...customerAuth, listAnnouncementsCtl);
+customerRoutes.post(
+  "/announcements/:id/read",
+  ...customerAuth,
+  markAnnouncementReadCtl,
+);
 
 export { customerRoutes };
