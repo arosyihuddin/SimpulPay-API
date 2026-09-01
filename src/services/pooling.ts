@@ -16,11 +16,7 @@ function sleep(ms: number) {
 
 /** Loop polling GoBiz utk satu merchant. Jalan di waitUntil, mati sendiri
  *  begitu gak ada lagi transaksi PENDING (semua PAID/EXPIRED). */
-export async function runPooling(
-  env: Env,
-  merchantId: string,
-  userId: string,
-) {
+export async function runPooling(env: Env, merchantId: string, userId: string) {
   const handle = createDb(env);
   const DB = handle.db;
   try {
@@ -30,6 +26,7 @@ export async function runPooling(
       parseInt(settings.pooling_interval || "5000", 10) || 5000,
     );
     while (true) {
+      console.debug("Pooling...");
       const rows = await queryTransactions(DB, {
         merchantId,
         status: "PENDING",
