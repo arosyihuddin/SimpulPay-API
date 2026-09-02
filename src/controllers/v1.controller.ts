@@ -141,6 +141,7 @@ export async function checkPayment(c: Context<AppEnv>) {
   if (!amount || isNaN(Number(amount))) fail(400, "Nominal pembayaran tidak valid");
   try {
     const matchedTransaction = await verifyPayment(
+      c.env,
       DB,
       merchantId,
       amount,

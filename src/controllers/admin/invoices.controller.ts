@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
 import { bad, paramId } from "./helpers";
+import { broadcast, notifyUser } from "../../services/realtime";
 import {
   getInvoice,
   listInvoices,
@@ -25,7 +26,13 @@ export async function listInvoicesCtl(c: Context<AppEnv>) {
     | undefined;
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const offset = parseInt(c.req.query("offset") ?? "0", 10);
-  const invoices = await listInvoices(DB, { userId, subscriptionId, status, limit, offset });
+  const invoices = await listInvoices(DB, {
+    userId,
+    subscriptionId,
+    status,
+    limit,
+    offset,
+  });
   const total = await countInvoices(DB, userId);
   return c.json({ success: true, data: { invoices, total } });
 }
@@ -43,9 +50,38 @@ export async function markInvoicePaidCtl(c: Context<AppEnv>) {
   const sub = await getSubscription(DB, inv.subscription_id);
   if (sub && (sub.status === "pending" || sub.status === "expired")) {
     const endsAt =
-      inv.period_end && inv.period_end > now ? inv.period_end : now + 30 * 24 * 60 * 60 * 1000;
+      inv.period_end && inv.period_end > now
+        ? inv.period_end
+        : now + 30 * 24 * 60 * 60 * 1000;
     await activateSubscriptionSwap(DB, sub.id, sub.user_id, endsAt);
-    await insertLog(DB, "SUCCESS", `Invoice ${id} di-approve admin; sub ${sub.id} aktif`, null, sub.user_id);
+    await insertLog(
+      DB,
+      "SUCCESS",
+      `Invoice ${id} di-approve admin; sub ${sub.id} aktif`,
+      null,
+      sub.user_id,
+    );
+    broadcast(c.env, {
+      type: "invoice_paid",
+      scope: "admin",
+      data: {
+        invoice_id: id,
+        subscription_id: sub.id,
+        user_id: sub.user_id,
+        amount: inv.amount,
+        paid_at: now,
+        by: "admin",
+      },
+    });
+    notifyUser(c.env, sub.user_id, {
+      type: "notification",
+      data: {
+        title: "Pembayaran Berhasil",
+        message: `Invoice ${id} dikonfirmasi admin — subscription aktif`,
+        type: "payment_success",
+        created_at: now,
+      },
+    });
   }
   return c.json({ success: true });
 }
@@ -62,7 +98,33 @@ export async function rejectInvoiceCtl(c: Context<AppEnv>) {
   const sub = await getSubscription(DB, inv.subscription_id);
   if (sub && sub.status === "pending") {
     await updateSubscription(DB, sub.id, { status: "cancelled" });
-    await insertLog(DB, "INFO", `Invoice ${id} ditolak admin; sub ${sub.id} dibatalkan`, null, sub.user_id);
+    await insertLog(
+      DB,
+      "INFO",
+      `Invoice ${id} ditolak admin; sub ${sub.id} dibatalkan`,
+      null,
+      sub.user_id,
+    );
+    broadcast(c.env, {
+      type: "invoice_rejected",
+      scope: "admin",
+      data: {
+        invoice_id: id,
+        subscription_id: sub.id,
+        user_id: sub.user_id,
+        amount: inv.amount,
+        by: "admin",
+      },
+    });
+    broadcast(c.env, {
+      type: "subscription_cancelled",
+      userId: sub.user_id,
+      data: {
+        subscription_id: sub.id,
+        plan_id: sub.plan_id,
+        cancelled_at: Date.now(),
+      },
+    });
   }
   return c.json({ success: true });
 }

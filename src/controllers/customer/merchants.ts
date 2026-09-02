@@ -25,7 +25,7 @@ import { decodeQRCodeFromImage } from "../../services/qrDecoder";
 import { formatTransaction } from "../../services/gojek";
 import { getValidHeaders } from "../../services/sessionManager";
 import { checkDailyPaidLimit } from "../../services/limits";
-import { broadcast } from "../../services/realtime";
+import { broadcast, notifyUser } from "../../services/realtime";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
@@ -181,7 +181,6 @@ export async function createQris(c: Context<AppEnv>) {
   const userId = currentUserId(c);
   const merchantId = paramId(c);
   const merchant = await ownedActiveMerchant(DB, userId, merchantId);
-  // Cek sesi GoBiz beneran valid (ping 1x) sebelum bikin QRIS — biar gak gagal di pooling.
   const headers = await getValidHeaders(DB, merchant.id, undefined, true);
   if (!headers)
     bad(
@@ -237,8 +236,24 @@ export async function createQris(c: Context<AppEnv>) {
   );
   broadcast(c.env, {
     type: "qris_created",
-    scope: "admin",
-    data: { id: qrisId, merchantId: merchant.id, status: "pending" },
+    userId,
+    data: {
+      id: qrisId,
+      trx_id: trxId,
+      merchantId: merchant.id,
+      amount_to_pay: pay,
+      status: "pending",
+      expires_at: new Date(expiresAt).toISOString(),
+    },
+  });
+  broadcast(c.env, {
+    type: "log",
+    userId,
+    data: {
+      type: "INFO",
+      message: "QRIS dibuat: Rp" + base + " (+" + code + ")",
+      created_at: now,
+    },
   });
   const stub = c.env.APP_HUB.get(c.env.APP_HUB.idFromName("global"));
   c.executionCtx.waitUntil(stub.fetch("http://internal/start-pooling"));

@@ -8,8 +8,10 @@ import type { Env } from "../types";
 const MIN_INTERVAL_MS = 1000;
 const DEFAULT_INTERVAL_MS = 8000;
 
+const tagUser = (id: string) => `u:${id}`;
+const tagScope = (s: string) => `s:${s}`;
+
 export class AppHub implements DurableObject {
-  private scopes = new Map<WebSocket, string | undefined>();
   private state: DurableObjectState;
   private env: Env;
 
@@ -27,25 +29,40 @@ export class AppHub implements DurableObject {
       return new Response("ok");
     }
 
-    // —— Broadcast ——
+    // —— Broadcast (data sistem, per-user; scope cadangan buat nanti) ——
     if (url.pathname === "/broadcast" && request.method === "POST") {
-      const ev: { type: string; data?: unknown; scope?: string } =
-        await request.json();
-      this.broadcast(ev.type, ev.data, ev.scope);
+      const ev: {
+        type: string;
+        data?: unknown;
+        userId?: string;
+        scope?: string;
+      } = await request.json();
+      this.broadcast(ev.type, ev.data, ev.userId, ev.scope);
       return new Response(null, { status: 200 });
     }
 
-    // —— WebSocket upgrade ——
+    // —— Notify satu user (customer) ——
+    if (url.pathname === "/notify-user" && request.method === "POST") {
+      const ev: { type: string; data?: unknown; userId: string } =
+        await request.json();
+      this.notifyUser(ev.userId, ev.type, ev.data);
+      return new Response(null, { status: 200 });
+    }
+
+    // —— WebSocket upgrade: customer = ?user_id, admin = ?scope ——
+    const userId = url.searchParams.get("user_id");
     const scope = url.searchParams.get("scope") ?? undefined;
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
+    console.log(`New Client Connected: ${userId}`);
+    console.log(`Cient has connected : ${client.readyState}`);
 
-    this.state.acceptWebSocket(server);
-    this.scopes.set(server, scope);
-
-    server.addEventListener("close", () => {
-      this.scopes.delete(server);
-    });
+    // Hibernation API: tag routing survive eviction.
+    // Scope = dimensi tambahan (opsional), bukan pengganti userId.
+    const tags: string[] = [];
+    if (userId) tags.push(tagUser(userId));
+    if (scope) tags.push(tagScope(scope));
+    this.state.acceptWebSocket(server, tags);
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -98,18 +115,24 @@ export class AppHub implements DurableObject {
     return Math.max(MIN_INTERVAL_MS, min);
   }
 
-  broadcast(type: string, data?: unknown, scope?: string) {
+  /** Kirim ke socket bertag userId (data sistem) + tambahan scope kalo ada. */
+  broadcast(type: string, data?: unknown, userId?: string, scope?: string) {
     const text = JSON.stringify({ type, data });
-    for (const ws of this.state.getWebSockets()) {
-      if (ws.readyState !== WebSocket.OPEN) continue;
-      const clientScope = this.scopes.get(ws);
-      if (scope === undefined) {
-        ws.send(text);
-      } else if (scope === "admin" && clientScope === "admin") {
-        ws.send(text);
-      } else if (clientScope === scope) {
-        ws.send(text);
+    const tags: string[] = [];
+    if (userId) tags.push(tagUser(userId));
+    if (scope) tags.push(tagScope(scope));
+    for (const tag of tags) {
+      for (const ws of this.state.getWebSockets(tag)) {
+        if (ws.readyState === WebSocket.OPEN) ws.send(text);
       }
+    }
+  }
+
+  /** Kirim ke semua socket bertag userId tertentu. */
+  notifyUser(userId: string, type: string, data?: unknown) {
+    const text = JSON.stringify({ type, data });
+    for (const ws of this.state.getWebSockets(tagUser(userId))) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(text);
     }
   }
 }

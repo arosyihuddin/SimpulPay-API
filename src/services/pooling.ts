@@ -1,4 +1,9 @@
-import { queryTransactions, updateTransactionStatus, updateInvoiceByTransaction, getMerchant } from "../db/repositories";
+import {
+  queryTransactions,
+  updateTransactionStatus,
+  updateInvoiceByTransaction,
+  getMerchant,
+} from "../db/repositories";
 import { verifyPayment } from "./gojek";
 import { broadcast } from "./realtime";
 import type { Db } from "../db/client";
@@ -24,6 +29,13 @@ export async function verifyMerchantPending(
   for (const t of txs) {
     if (t.expires_at <= now) {
       await updateTransactionStatus(DB, t.id, "expired");
+      if (t.user_id) {
+        broadcast(env, {
+          type: "qris_expired",
+          userId: t.user_id,
+          data: { id: t.id, merchantId, status: "expired" },
+        });
+      }
     }
   }
   if (alive.length === 0) return;
@@ -32,6 +44,13 @@ export async function verifyMerchantPending(
   if (!merchant || merchant.status !== "active") {
     for (const t of alive) {
       await updateTransactionStatus(DB, t.id, "expired");
+      if (t.user_id) {
+        broadcast(env, {
+          type: "qris_expired",
+          userId: t.user_id,
+          data: { id: t.id, merchantId, status: "expired" },
+        });
+      }
     }
     return;
   }
@@ -39,6 +58,7 @@ export async function verifyMerchantPending(
   for (const t of alive) {
     try {
       const matched = await verifyPayment(
+        env,
         DB,
         merchantId,
         t.amount,
@@ -50,21 +70,28 @@ export async function verifyMerchantPending(
       if (matched) {
         await updateTransactionStatus(DB, t.id, "paid");
         await updateInvoiceByTransaction(DB, t.id, "paid", Date.now());
-        broadcast(env, {
-          type: "payment_received",
-          scope: "admin",
-          data: { id: t.id, status: "paid", amount: t.amount },
-        });
+        if (t.user_id) {
+          broadcast(env, {
+            type: "payment_received",
+            userId: t.user_id,
+            data: { id: t.id, status: "paid", amount: t.amount },
+          });
+          broadcast(env, {
+            type: "transaction_updated",
+            userId: t.user_id,
+            data: {
+              id: t.id,
+              trx_id: t.trx_id,
+              merchantId,
+              status: "paid",
+              amount: t.amount,
+              paid_at: Date.now(),
+            },
+          });
+        }
       }
     } catch {
-      const m = await getMerchant(DB, merchantId);
-      if (!m || m.status !== "active") {
-        for (const p of alive) {
-          await updateTransactionStatus(DB, p.id, "expired");
-        }
-        return;
-      }
-      // error jaringan / sesi expired → skip, iterasi berikutnya
+      // Error sesi GoPay / fetch — jangan expire, biar di-retry round berikutnya.
     }
   }
 }

@@ -1,5 +1,4 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { swaggerUI } from "@hono/swagger-ui";
 import { cors } from "hono/cors";
 import { publicRoutes } from "./routes/public";
 import { adminRoutes } from "./routes/admin";
@@ -79,22 +78,6 @@ app.openAPIRegistry.registerComponent("securitySchemes", "ApiKey", {
   in: "header",
   name: "x-api-key",
 });
-app.get("/swagger", swaggerUI({ url: "/docs/json" }));
-
-app.get("/ws", async (c) => {
-  const upgradeHeader = c.req.header("Upgrade");
-  if (!upgradeHeader || upgradeHeader.toLowerCase() !== "websocket") {
-    return c.text("Expected WebSocket upgrade", 426);
-  }
-  const scope = c.req.query("scope") ?? "admin";
-  const stub = c.env.APP_HUB.get(c.env.APP_HUB.idFromName("global"));
-  const url = new URL("http://internal");
-  url.searchParams.set("scope", scope);
-  return stub.fetch(
-    new Request(url.toString(), { headers: { Upgrade: "websocket" } }),
-  );
-});
-
 app.get("*", (c) => c.json({ success: false, message: "Not Found" }, 404));
 
 app.onError((err, c) => {

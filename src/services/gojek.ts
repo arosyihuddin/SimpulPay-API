@@ -9,7 +9,9 @@ import {
 import { getMerchantId } from "./qris";
 import { checkDailyPaidLimit } from "./limits";
 import { sendWebhook } from "./webhook";
+import { notifyUser } from "./realtime";
 import type { Db } from "../db/client";
+import type { Env } from "../types";
 
 const GOJEK_TRANSACTIONS_URL =
   "https://api.gojekapi.com/merchant-analytics/v2/merchants/transactions";
@@ -160,6 +162,7 @@ export async function fetchTransactionsWithRetry(
 }
 
 export async function verifyPayment(
+  env: Env,
   DB: Db,
   merchantId: string,
   amount: unknown,
@@ -216,6 +219,15 @@ export async function verifyPayment(
               title: "Pembayaran Berhasil",
               message: `Pembayaran Rp${txAmount.toLocaleString("id-ID")} diterima (TRX ${txId})`,
               dataJson: JSON.stringify({ txId, qrisId, amount: txAmount }),
+            });
+            notifyUser(env, merchant.user_id, {
+              type: "notification",
+              data: {
+                title: "Pembayaran Berhasil",
+                message: `Pembayaran Rp${txAmount.toLocaleString("id-ID")} diterima (TRX ${txId})`,
+                type: "payment_success",
+                created_at: Date.now(),
+              },
             });
             await sendWebhook(DB, merchant.user_id, "transaction.paid", {
               transaction_id: txId,

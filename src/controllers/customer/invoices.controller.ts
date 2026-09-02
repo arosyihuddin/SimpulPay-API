@@ -15,9 +15,12 @@ import {
   insertLog,
 } from "../../db/repositories";
 import { verifyPayment } from "../../services/gojek";
+import { broadcast } from "../../services/realtime";
+import type { Env } from "../../types";
 
 /** Verifikasi payment pending subscription. Kalau lunas → activate sub + update invoice. */
 async function verifyPendingInvoice(
+  env: Env,
   DB: Db,
   sub: SubscriptionRow,
   inv: InvoiceRow,
@@ -44,6 +47,7 @@ async function verifyPendingInvoice(
   let paid = false;
   try {
     paid = !!(await verifyPayment(
+      env,
       DB,
       subTx.merchant_id!,
       subTx.amount,
@@ -69,6 +73,18 @@ async function verifyPendingInvoice(
     null,
     sub.user_id,
   );
+  broadcast(env, {
+    type: "invoice_paid",
+    scope: "admin",
+    data: {
+      invoice_id: inv.id,
+      subscription_id: sub.id,
+      user_id: sub.user_id,
+      plan_id: sub.plan_id,
+      amount: inv.amount,
+      paid_at: now,
+    },
+  });
   return true;
 }
 
@@ -90,7 +106,7 @@ export async function listMyInvoicesCtl(c: Context<AppEnv>) {
       const sub = await getSubscription(DB, inv.subscription_id);
       if (!sub || (sub.status !== "pending" && sub.status !== "expired"))
         return inv;
-      const paid = await verifyPendingInvoice(DB, sub, inv);
+      const paid = await verifyPendingInvoice(c.env, DB, sub, inv);
       if (paid) return { ...inv, status: "paid" as const };
       return inv;
     }),

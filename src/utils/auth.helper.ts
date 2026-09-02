@@ -1,6 +1,6 @@
 import { getCookie } from "hono/cookie";
 import type { Context } from "hono";
-import { ADMIN_COOKIE } from "../middleware/guards";
+import { X_COOKIE } from "../middleware/guards";
 
 const SALT_LEN = 16;
 const ITERATIONS = 100_000;
@@ -66,7 +66,7 @@ export async function verifyPassword(
 }
 
 export function cookieToken(c: Context): string | null {
-  const raw = getCookie(c, ADMIN_COOKIE);
+  const raw = getCookie(c, X_COOKIE);
   return raw ? decodeURIComponent(raw) : null;
 }
 

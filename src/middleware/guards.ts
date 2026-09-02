@@ -12,7 +12,7 @@ import { fail } from "./errorHandler";
 import { cookieToken } from "../utils/auth.helper";
 import type { AppEnv } from "../types";
 
-export const ADMIN_COOKIE = "gopay_admin_session";
+export const X_COOKIE = "x-session";
 export const ADMIN_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Set adminToken dari cookie — dipakai dua router (customer + admin). */
@@ -49,7 +49,7 @@ export async function apiKeyOk(
 }
 
 /** Return userId jika sesi valid, else null. */
-async function sessionOk(
+export async function sessionOk(
   DB: Db,
   token: string | null | undefined,
 ): Promise<string | null> {

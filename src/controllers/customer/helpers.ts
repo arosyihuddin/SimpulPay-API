@@ -3,14 +3,14 @@ import type { Db } from "../../db/client";
 import type { AppEnv } from "../../types";
 import { fetchTransactionsWithRetry } from "../../services/gojek";
 import { getMerchantByUser } from "../../db/repositories";
-import { ADMIN_TTL_MS } from "../../middleware/guards";
+import { ADMIN_TTL_MS, X_COOKIE } from "../../middleware/guards";
 
 export const SESSION_MAX_AGE = ADMIN_TTL_MS / 1000;
 
 export function cookieHeader(token: string, maxAge: number): string {
   const sameSite = "None";
   const secure = "; Secure";
-  return `${"gopay_admin_session"}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=${sameSite}${secure}; Max-Age=${maxAge}`;
+  return `${X_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=${sameSite}${secure}; Max-Age=${maxAge}`;
 }
 
 export function bad(message: string, status = 400): never {
