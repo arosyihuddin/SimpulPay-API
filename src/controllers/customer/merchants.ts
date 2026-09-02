@@ -26,7 +26,6 @@ import { formatTransaction } from "../../services/gojek";
 import { getValidHeaders } from "../../services/sessionManager";
 import { checkDailyPaidLimit } from "../../services/limits";
 import { broadcast } from "../../services/realtime";
-import { startPooling } from "../../services/pooling";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
@@ -191,8 +190,7 @@ export async function createQris(c: Context<AppEnv>) {
     );
   const body = await c.req.json();
   const base = parseInt(String(body?.amount ?? ""), 10);
-  if (Number.isNaN(base) || base <= 0)
-    bad("Nominal pembayaran tidak valid");
+  if (Number.isNaN(base) || base <= 0) bad("Nominal pembayaran tidak valid");
   const staticTemplate = await getQrisStatic(DB, merchant.id);
   if (!staticTemplate)
     bad(
@@ -242,8 +240,8 @@ export async function createQris(c: Context<AppEnv>) {
     scope: "admin",
     data: { id: qrisId, merchantId: merchant.id, status: "pending" },
   });
-  // Pooling otomatis: poll GoBiz sampai transaksi ini (dan pending lain merchant itu) lunas/expired.
-  c.executionCtx.waitUntil(startPooling(c.env, merchant.id, userId));
+  const stub = c.env.APP_HUB.get(c.env.APP_HUB.idFromName("global"));
+  c.executionCtx.waitUntil(stub.fetch("http://internal/start-pooling"));
   return c.json({
     success: true,
     data: {

@@ -28,7 +28,7 @@ import { createDb, closeDb } from "./db/client";
 import { maintenanceGuard } from "./middleware/guards";
 import { processWebhookQueue } from "./services/webhook";
 import type { AppEnv, Env } from "./types";
-import { MerchantWS } from "./durable_objects/merchantWS";
+import { AppHub } from "./durable_objects/appHub";
 
 const app = new OpenAPIHono<AppEnv>();
 
@@ -87,7 +87,7 @@ app.get("/ws", async (c) => {
     return c.text("Expected WebSocket upgrade", 426);
   }
   const scope = c.req.query("scope") ?? "admin";
-  const stub = c.env.MERCHANT_WS.get(c.env.MERCHANT_WS.idFromName("global"));
+  const stub = c.env.APP_HUB.get(c.env.APP_HUB.idFromName("global"));
   const url = new URL("http://internal");
   url.searchParams.set("scope", scope);
   return stub.fetch(
@@ -105,7 +105,7 @@ app.onError((err, c) => {
   return c.json(body, status);
 });
 
-export { MerchantWS };
+export { AppHub };
 
 export default {
   fetch: app.fetch,
@@ -162,6 +162,14 @@ export default {
         await processWebhookQueue(DB);
       } catch (err) {
         console.error("[cron] Gagal process webhook queue:", (err as Error).message);
+      }
+      // Safety net: pancing DO pooling kalo alarm chain mati (mis. DO restart).
+      // Harmless — DO sendiri yg jadwalin alarm berikutnya kalo masih ada pending.
+      try {
+        const stub = env.APP_HUB.get(env.APP_HUB.idFromName("global"));
+        await stub.fetch("http://internal/start-pooling");
+      } catch (err) {
+        console.error("[cron] Gagal pancing DO pooling:", (err as Error).message);
       }
     } else if (event.cron === "0 */6 * * *") {
       // auto-refresh sesi per merchant

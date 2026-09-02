@@ -5,7 +5,7 @@ import type { Db } from "../db/client";
 export interface Env {
   HYPERDRIVE?: { connectionString: string };
   DATABASE_URL?: string;
-  MERCHANT_WS: DurableObjectNamespace;
+  APP_HUB: DurableObjectNamespace;
   CORS_ORIGINS?: string;
 }
 

@@ -4,13 +4,13 @@ compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
 [durable_objects]
-bindings = [{ name = "MERCHANT_WS", class_name = "MerchantWS" }]
+bindings = [{ name = "APP_HUB", class_name = "AppHub" }]
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id = "04defe125a1f4978bbe4c50ec1bd66e8"
 
-[exports.MerchantWS]
+[exports.AppHub]
 type = "durable-object"
 storage = "sqlite"
 

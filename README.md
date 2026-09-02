@@ -24,7 +24,7 @@ src/
   routes/             ← public.ts, v1.ts, admin.ts
   controllers/        ← v1, public, admin
   middleware/         ← guards.ts, errorHandler.ts
-  durable_objects/    ← merchantWS.ts (WebSocket broadcast)
+  durable_objects/    ← appHub.ts (WebSocket broadcast + DO alarm pooling)
 ```
 
 ## Setup
