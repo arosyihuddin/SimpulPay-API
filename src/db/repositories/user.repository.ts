@@ -37,7 +37,10 @@ export async function getUserById(db: Db, id: string): Promise<UserRow | null> {
   return rows[0] ?? null;
 }
 
-export async function getUserByEmail(db: Db, email: string): Promise<UserRow | null> {
+export async function getUserByEmail(
+  db: Db,
+  email: string,
+): Promise<UserRow | null> {
   const rows = await db.select().from(users).where(eq(users.email, email));
   return rows[0] ?? null;
 }
@@ -67,7 +70,14 @@ export async function createUser(
 export async function updateUser(
   db: Db,
   id: string,
-  u: { email?: string; name?: string | null; phone?: string | null; role?: "admin" | "customer"; passwordHash?: string; status?: "active" | "suspended" | "banned" },
+  u: {
+    email?: string;
+    name?: string | null;
+    phone?: string | null;
+    role?: "admin" | "customer";
+    passwordHash?: string;
+    status?: "active" | "suspended" | "banned";
+  },
 ) {
   const now = Date.now();
   const sets: Record<string, unknown> = { updated_at: now };
@@ -81,7 +91,11 @@ export async function updateUser(
   await db.update(users).set(sets).where(eq(users.id, id));
 }
 
-export async function updateUserPassword(db: Db, id: string, passwordHash: string) {
+export async function updateUserPassword(
+  db: Db,
+  id: string,
+  passwordHash: string,
+) {
   await db
     .update(users)
     .set({ password_hash: passwordHash, updated_at: Date.now() })
@@ -90,4 +104,12 @@ export async function updateUserPassword(db: Db, id: string, passwordHash: strin
 
 export async function deleteUser(db: Db, id: string) {
   await db.delete(users).where(eq(users.id, id));
+}
+
+export async function getAdminId(db: Db) {
+  const result = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.role, "admin"));
+  return result[0]?.id;
 }

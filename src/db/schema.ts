@@ -40,6 +40,20 @@ export const transactionStatusEnum = pgEnum("transaction_status", [
   "paid",
   "expired",
 ]);
+export const transactionTypeEnum = pgEnum("transaction_type", [
+  "merchant",
+  "subscription",
+]);
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "payment_success",
+  "payment_received",
+  "invoice_pending",
+  "invoice_paid",
+  "invoice_rejected",
+  "subscription_cancelled",
+  "token_warning",
+]);
 
 export const transactions = pgTable("transactions", {
   id: text("id").primaryKey(),
@@ -49,6 +63,7 @@ export const transactions = pgTable("transactions", {
   unique_code: integer("unique_code").notNull().default(0),
   trx_id: text("trx_id").notNull(),
   status: transactionStatusEnum("status").notNull().default("pending"),
+  type: transactionTypeEnum("type").notNull().default("merchant"),
   merchant_id: text("merchant_id").references(() => merchants.id, {
     onDelete: "set null",
   }),
@@ -140,7 +155,7 @@ export const notifications = pgTable("notifications", {
   merchant_id: text("merchant_id").references(() => merchants.id, {
     onDelete: "cascade",
   }),
-  type: text("type").notNull(),
+  type: notificationTypeEnum("type").notNull().default("payment_success"),
   title: text("title").notNull(),
   message: text("message").notNull(),
   data_json: text("data_json"),

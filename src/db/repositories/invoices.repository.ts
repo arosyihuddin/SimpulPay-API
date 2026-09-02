@@ -41,6 +41,18 @@ export async function getInvoice(db: Db, id: string): Promise<InvoiceRow | null>
   return rows[0] ?? null;
 }
 
+/** Invoice yang merujuk ke transaksi QRIS tertentu (via transaction_id). */
+export async function getInvoiceByTransaction(
+  db: Db,
+  transactionId: string,
+): Promise<InvoiceRow | null> {
+  const rows = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.transaction_id, transactionId));
+  return rows[0] ?? null;
+}
+
 export async function listInvoices(
   db: Db,
   opts: {

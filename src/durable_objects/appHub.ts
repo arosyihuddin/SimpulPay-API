@@ -41,11 +41,15 @@ export class AppHub implements DurableObject {
       return new Response(null, { status: 200 });
     }
 
-    // —— Notify satu user (customer) ——
+    // —— Notify (notifikasi) — routing sama kayak broadcast: u:<id> + s:<scope> ——
     if (url.pathname === "/notify-user" && request.method === "POST") {
-      const ev: { type: string; data?: unknown; userId: string } =
-        await request.json();
-      this.notifyUser(ev.userId, ev.type, ev.data);
+      const ev: {
+        type: string;
+        data?: unknown;
+        userId?: string;
+        scope?: string;
+      } = await request.json();
+      this.broadcast(ev.type, ev.data, ev.userId, ev.scope);
       return new Response(null, { status: 200 });
     }
 
@@ -128,11 +132,4 @@ export class AppHub implements DurableObject {
     }
   }
 
-  /** Kirim ke semua socket bertag userId tertentu. */
-  notifyUser(userId: string, type: string, data?: unknown) {
-    const text = JSON.stringify({ type, data });
-    for (const ws of this.state.getWebSockets(tagUser(userId))) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(text);
-    }
-  }
 }

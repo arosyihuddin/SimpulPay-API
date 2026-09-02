@@ -20,7 +20,7 @@ export async function setMaintenanceCtl(c: Context<AppEnv>) {
     "INFO",
     `Maintenance mode ${on ? "DIAKTIFKAN" : "dimatikan"} oleh admin`,
     null,
-    c.get("userId") ?? undefined,
+    c.get("user")?.userId ?? undefined,
   );
   return c.json({ success: true, data: { maintenance: on } });
 }

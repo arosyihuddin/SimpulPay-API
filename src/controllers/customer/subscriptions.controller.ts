@@ -4,7 +4,6 @@ import { getDb } from "../../db/client";
 import { bad, currentUserId } from "./helpers";
 import {
   getPlan,
-  getActiveSubscription,
   getActivePlanForUser,
   getPendingSubscription,
   createSubscription,
@@ -22,6 +21,8 @@ import {
   uniqueAmount,
   getQrisStatic,
 } from "../../services/qris";
+import { broadcast } from "../../services/realtime";
+import { createNotifications } from "../../utils/notification.helper";
 
 /**
  * GET /subscriptions
@@ -32,7 +33,7 @@ export async function listMySubscriptionsCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
 
-  if (c.get("role") === "admin") {
+  if (c.get("user")?.role === "admin") {
     return c.json({
       success: true,
       data: {
@@ -112,7 +113,8 @@ export async function listMySubscriptionsCtl(c: Context<AppEnv>) {
  */
 export async function createSubscriptionCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
-  const userId = currentUserId(c);
+  const user = c.get("user");
+  const userId = user?.userId ?? currentUserId(c);
   const body = await c.req.json();
   const planId = body?.plan_id;
   if (!planId) bad("plan_id wajib diisi");
@@ -120,27 +122,6 @@ export async function createSubscriptionCtl(c: Context<AppEnv>) {
   if (!plan) bad("Plan tidak ditemukan", 404);
   const now = Date.now();
   const monthMs = 30 * 24 * 60 * 60 * 1000;
-
-  // Plan gratis: langsung aktif, tanpa pembayaran.
-  if (plan.type === "free" || plan.price <= 0) {
-    const stalePending = await getPendingSubscription(DB, userId);
-    if (stalePending)
-      await updateSubscription(DB, stalePending.id, { status: "cancelled" });
-    const existing = await getActiveSubscription(DB, userId);
-    const subId = existing?.id ?? "sub_" + crypto.randomUUID().slice(0, 8);
-    if (existing) {
-      await updateSubscription(DB, subId, { planId, endsAt: now + monthMs });
-    } else {
-      await createSubscription(DB, {
-        id: subId,
-        userId,
-        planId,
-        startsAt: now,
-        endsAt: now + monthMs,
-      });
-    }
-    return c.json({ success: true, data: { id: subId, status: "active" } });
-  }
 
   // Upgrade/downgrade berbayar: pending dulu, bayar via QRIS merchant admin.
   const pending = await getPendingSubscription(DB, userId);
@@ -173,8 +154,6 @@ export async function createSubscriptionCtl(c: Context<AppEnv>) {
     "SUB-" + Math.random().toString(36).substring(2, 10).toUpperCase();
   const expiresAt = now + qrisExpiryMs();
 
-  // Transaksi atas nama admin (pemilik merchant QRIS), bukan customer.
-  // Invoice nyimpen transaction_id → verifikasi payment follow link ini.
   await insertTransaction(DB, {
     id: qrisId,
     code: dynamicCode!,
@@ -186,6 +165,7 @@ export async function createSubscriptionCtl(c: Context<AppEnv>) {
     userId: adminMerchant.user_id,
     createdAt: now,
     expiresAt,
+    type: "subscription",
   });
 
   const invoiceId = "inv_" + crypto.randomUUID().slice(0, 8);
@@ -194,10 +174,35 @@ export async function createSubscriptionCtl(c: Context<AppEnv>) {
     userId,
     subscriptionId: subId,
     transactionId: qrisId,
-    amount: plan.price,
+    amount: pay,
     periodStart: now,
     periodEnd: now + monthMs,
   });
+  broadcast(c.env, {
+    type: "invoice_pending",
+    userId,
+    scope: "admin",
+    data: {
+      invoice_id: invoiceId,
+      subscription_id: subId,
+      user_id: userId,
+      user_name: user?.name ?? null,
+      user_email: user?.email ?? null,
+      plan_id: plan.id,
+      code: dynamicCode,
+      amount: pay,
+      periodStart: now,
+    },
+  });
+  await createNotifications(DB, c.env, {
+    type: "invoice_pending",
+    toAdmin: {
+      title: "Invoice Baru",
+      message: `Invoice ${invoiceId} — ${plan.name} — Rp${pay.toLocaleString("id-ID")}`,
+    },
+  });
+  const stub = c.env.APP_HUB.get(c.env.APP_HUB.idFromName("global"));
+  c.executionCtx.waitUntil(stub.fetch("http://internal/start-pooling"));
   await insertLog(
     DB,
     "INFO",

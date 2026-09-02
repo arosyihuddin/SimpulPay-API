@@ -14,7 +14,12 @@ export type AppEnv = {
   Variables: {
     adminToken: string | null;
     db: { client: Sql; db: Db } | null;
-    userId: string | null;
+    user: {
+      userId: string;
+      name: string;
+      email: string;
+      role: string;
+    } | null;
     merchantId: string | null;
     role: string | null;
   };

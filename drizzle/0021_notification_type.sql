@@ -1,0 +1,3 @@
+CREATE TYPE "public"."notification_type" AS ENUM('payment_success', 'payment_received', 'invoice_pending', 'invoice_paid', 'invoice_rejected', 'subscription_cancelled', 'token_warning');--> statement-breakpoint
+ALTER TABLE "notifications" ALTER COLUMN "type" SET DEFAULT 'payment_success'::"public"."notification_type";--> statement-breakpoint
+ALTER TABLE "notifications" ALTER COLUMN "type" SET DATA TYPE "public"."notification_type" USING "type"::"public"."notification_type";

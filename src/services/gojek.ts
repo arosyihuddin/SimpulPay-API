@@ -4,12 +4,11 @@ import {
   getClaim,
   getMerchant,
   insertLog,
-  insertNotification,
 } from "../db/repositories";
 import { getMerchantId } from "./qris";
 import { checkDailyPaidLimit } from "./limits";
 import { sendWebhook } from "./webhook";
-import { notifyUser } from "./realtime";
+import { createNotifications } from "../utils/notification.helper";
 import type { Db } from "../db/client";
 import type { Env } from "../types";
 
@@ -212,21 +211,15 @@ export async function verifyPayment(
           );
           const merchant = await getMerchant(DB, merchantId);
           if (merchant) {
-            await insertNotification(DB, {
-              userId: merchant.user_id,
-              merchantId,
+            const title = "Pembayaran Berhasil";
+            const message = `Pembayaran Rp${txAmount.toLocaleString("id-ID")} diterima (TRX ${txId})`;
+            await createNotifications(DB, env, {
               type: "payment_success",
-              title: "Pembayaran Berhasil",
-              message: `Pembayaran Rp${txAmount.toLocaleString("id-ID")} diterima (TRX ${txId})`,
-              dataJson: JSON.stringify({ txId, qrisId, amount: txAmount }),
-            });
-            notifyUser(env, merchant.user_id, {
-              type: "notification",
-              data: {
-                title: "Pembayaran Berhasil",
-                message: `Pembayaran Rp${txAmount.toLocaleString("id-ID")} diterima (TRX ${txId})`,
-                type: "payment_success",
-                created_at: Date.now(),
+              toUser: {
+                userId: merchant.user_id,
+                merchantId,
+                title,
+                message,
               },
             });
             await sendWebhook(DB, merchant.user_id, "transaction.paid", {

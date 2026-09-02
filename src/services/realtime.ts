@@ -14,8 +14,7 @@ async function post(env: Env, path: string, ev: RealtimeEvent) {
       method: "POST",
       body: JSON.stringify(ev),
     });
-  } catch {
-  }
+  } catch {}
 }
 
 /**
@@ -27,7 +26,10 @@ export async function broadcast(env: Env, ev: RealtimeEvent) {
   await post(env, "/broadcast", ev);
 }
 
-/** Khusus notifikasi (payment_success / notification) ke satu user. */
-export async function notifyUser(env: Env, userId: string, ev: RealtimeEvent) {
-  await post(env, "/notify-user", { ...ev, userId });
+/**
+ * Notifikasi (payment_success / notification). Routing sama kayak broadcast:
+ * kirim ke u:<userId> + s:<scope> (scope opsional, bukan pengganti userId).
+ */
+export async function notifyUser(env: Env, ev: RealtimeEvent) {
+  await post(env, "/notify-user", ev);
 }

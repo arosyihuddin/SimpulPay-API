@@ -38,7 +38,7 @@ export async function ownedActiveMerchant(
 }
 
 export function currentUserId(c: Context<AppEnv>): string {
-  const id = c.get("userId");
+  const id = c.get("user")?.userId;
   if (!id) bad("userId tidak ditemukan di context", 400);
   return id;
 }

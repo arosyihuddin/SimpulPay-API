@@ -39,14 +39,14 @@ export async function merchantStatus(c: Context<AppEnv>) {
   if (!id) fail(400, "merchant_id wajib di path");
   const merchant = await getMerchant(DB, id);
   if (!merchant) fail(404, "Merchant tidak ditemukan");
-  if (merchant.user_id !== c.get("userId"))
+  if (merchant.user_id !== c.get("user")?.userId)
     fail(403, "Akses ditolak: merchant bukan milik akun ini");
   return c.json(ok({ data: { active: merchant.status === "active" } }));
 }
 
 export async function createQris(c: Context<AppEnv>) {
   const DB = getDb(c);
-  const userId = c.get("userId");
+  const userId = c.get("user")?.userId;
   if (!userId) fail(500, "userId tidak ditemukan di context");
   let merchantId = c.get("merchantId");
   // Key gak terikat merchant → pilih random merchant aktif milik user.
@@ -102,7 +102,7 @@ export async function createQris(c: Context<AppEnv>) {
 
 export async function getQris(c: Context<AppEnv>) {
   const DB = getDb(c);
-  const userId = c.get("userId");
+  const userId = c.get("user")?.userId;
   if (!userId) fail(500, "userId tidak ditemukan di context");
   const id = c.req.param("id") ?? "";
   const qris = await getTransaction(DB, id);

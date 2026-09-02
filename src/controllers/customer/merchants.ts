@@ -25,7 +25,7 @@ import { decodeQRCodeFromImage } from "../../services/qrDecoder";
 import { formatTransaction } from "../../services/gojek";
 import { getValidHeaders } from "../../services/sessionManager";
 import { checkDailyPaidLimit } from "../../services/limits";
-import { broadcast, notifyUser } from "../../services/realtime";
+import { broadcast } from "../../services/realtime";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
@@ -46,7 +46,7 @@ export async function createMerchantCtl(c: Context<AppEnv>) {
   if (name.length < 2) bad("Nama merchant minimal 2 karakter");
   const type = body?.type === "shopeepay" ? "shopeepay" : "gopay";
 
-  const isAdmin = c.get("role") === "admin";
+  const isAdmin = c.get("user")?.role === "admin";
   if (!isAdmin) {
     const active = await getActivePlanForUser(DB, userId);
     const limit = active?.plan.max_merchants ?? 1;

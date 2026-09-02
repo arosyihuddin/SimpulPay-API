@@ -2,7 +2,8 @@ import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
 import { bad, paramId } from "./helpers";
-import { broadcast, notifyUser } from "../../services/realtime";
+import { broadcast } from "../../services/realtime";
+import { createNotifications } from "../../utils/notification.helper";
 import {
   getInvoice,
   listInvoices,
@@ -73,13 +74,12 @@ export async function markInvoicePaidCtl(c: Context<AppEnv>) {
         by: "admin",
       },
     });
-    notifyUser(c.env, sub.user_id, {
-      type: "notification",
-      data: {
+    await createNotifications(DB, c.env, {
+      type: "payment_success",
+      toUser: {
+        userId: sub.user_id,
         title: "Pembayaran Berhasil",
         message: `Invoice ${id} dikonfirmasi admin — subscription aktif`,
-        type: "payment_success",
-        created_at: now,
       },
     });
   }

@@ -3,13 +3,18 @@ import {
   updateTransactionStatus,
   updateInvoiceByTransaction,
   getMerchant,
+  getInvoiceByTransaction,
+  getSubscription,
+  activateSubscriptionSwap,
 } from "../db/repositories";
 import { verifyPayment } from "./gojek";
 import { broadcast } from "./realtime";
+import { createNotifications } from "../utils/notification.helper";
 import type { Db } from "../db/client";
 import type { Env } from "../types";
 
 const MAX_BATCH = 500;
+const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Verify SEMUA transaksi pending satu merchant. 1 pass, panggil dari DO alarm. */
 export async function verifyMerchantPending(
@@ -70,6 +75,30 @@ export async function verifyMerchantPending(
       if (matched) {
         await updateTransactionStatus(DB, t.id, "paid");
         await updateInvoiceByTransaction(DB, t.id, "paid", Date.now());
+        if (t.type === "subscription") {
+          const inv = await getInvoiceByTransaction(DB, t.id);
+          if (inv) {
+            const sub = await getSubscription(DB, inv.subscription_id);
+            if (sub && (sub.status === "pending" || sub.status === "expired")) {
+              const endsAt = now + MONTH_MS;
+              await activateSubscriptionSwap(DB, sub.id, sub.user_id, endsAt);
+            }
+            const title = "Pembayaran Berhasil";
+            const message = `Subscription lunas — Rp${inv.amount.toLocaleString("id-ID")}`;
+            await createNotifications(DB, env, {
+              type: "payment_success",
+              toUser: {
+                userId: inv.user_id,
+                title,
+                message,
+              },
+              toAdmin: {
+                title,
+                message,
+              },
+            });
+          }
+        }
         if (t.user_id) {
           broadcast(env, {
             type: "payment_received",

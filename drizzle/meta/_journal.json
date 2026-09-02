@@ -141,6 +141,20 @@
       "when": 1788277753286,
       "tag": "0019_classy_thena",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788367142418,
+      "tag": "0020_transaction_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788370134806,
+      "tag": "0021_notification_type",
+      "breakpoints": true
     }
   ]
 }

@@ -64,7 +64,13 @@ export const apiKeyGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   const key = extractApiKey(c);
   const result = await apiKeyOk(getDb(c), key);
   if (!result) fail(401, "Autentikasi Gagal: API Key tidak valid");
-  c.set("userId", result.userId);
+  const user = await getUserById(getDb(c), result.userId);
+  c.set("user", {
+    userId: result.userId,
+    name: user?.name ?? "",
+    email: user?.email ?? "",
+    role: user?.role ?? "customer",
+  });
   c.set("merchantId", result.merchantId);
   await next();
 };
@@ -76,7 +82,12 @@ export const adminGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   const user = await getUserById(getDb(c), userId);
   if (!user || user.role !== "admin")
     fail(403, "Akses ditolak: hanya untuk admin");
-  c.set("userId", userId);
+  c.set("user", {
+    userId,
+    name: user.name ?? "",
+    email: user.email,
+    role: user.role,
+  });
   c.set("role", user.role);
   await next();
 };
@@ -88,7 +99,12 @@ export const customerGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   const user = await getUserById(getDb(c), userId);
   if (!user || user.status !== "active")
     fail(401, "Tidak terautentikasi atau sesi berakhir");
-  c.set("userId", userId);
+  c.set("user", {
+    userId,
+    name: user.name ?? "",
+    email: user.email,
+    role: user.role,
+  });
   c.set("role", user.role);
   await next();
 };

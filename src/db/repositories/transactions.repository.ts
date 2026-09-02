@@ -19,6 +19,7 @@ export async function insertTransaction(
     userId: string;
     createdAt: number;
     expiresAt: number;
+    type?: "merchant" | "subscription";
   },
 ) {
   await db.insert(transactions).values({
@@ -31,6 +32,7 @@ export async function insertTransaction(
     merchant_id: r.merchantId,
     user_id: r.userId,
     status: "pending",
+    type: r.type ?? "merchant",
     created_at: r.createdAt,
     expires_at: r.expiresAt,
   });

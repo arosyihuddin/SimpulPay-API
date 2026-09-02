@@ -3,10 +3,11 @@ import { notifications } from "../schema";
 import type { Db } from "../client";
 
 export type NotificationRow = typeof notifications.$inferSelect;
+export type NotificationType = typeof notifications.$inferSelect.type;
 
 export async function insertNotification(
   db: Db,
-  n: { userId: string; merchantId?: string | null; type: string; title: string; message: string; dataJson?: string | null },
+  n: { userId: string; merchantId?: string | null; type: NotificationType; title: string; message: string; dataJson?: string | null },
 ) {
   await db.insert(notifications).values({
     user_id: n.userId,
