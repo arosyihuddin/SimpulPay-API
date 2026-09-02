@@ -7,7 +7,7 @@ import { createNotifications } from "../../utils/notification.helper";
 import {
   getInvoice,
   listInvoices,
-  countInvoices,
+  countInvoicesByStatus,
   updateInvoiceStatus,
   getSubscription,
   updateSubscription,
@@ -25,17 +25,26 @@ export async function listInvoicesCtl(c: Context<AppEnv>) {
     | "overdue"
     | "failed"
     | undefined;
+  const q = c.req.query("q") || undefined;
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const offset = parseInt(c.req.query("offset") ?? "0", 10);
-  const invoices = await listInvoices(DB, {
-    userId,
-    subscriptionId,
-    status,
-    limit,
-    offset,
+  const filter = { userId, subscriptionId, status, q };
+  const [invoices, { total, pending: pendingCount, paid: paidCount, overdue: overdueCount, failed: failedCount }] =
+    await Promise.all([
+      listInvoices(DB, { ...filter, limit, offset }),
+      countInvoicesByStatus(DB, {}),
+    ]);
+  return c.json({
+    success: true,
+    data: {
+      invoices,
+      total,
+      pending_count: pendingCount,
+      paid_count: paidCount,
+      overdue_count: overdueCount,
+      failed_count: failedCount,
+    },
   });
-  const total = await countInvoices(DB, userId);
-  return c.json({ success: true, data: { invoices, total } });
 }
 
 /**

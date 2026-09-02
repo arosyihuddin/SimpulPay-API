@@ -6,6 +6,7 @@ import type { Db } from "../../db/client";
 import type { SubscriptionRow, InvoiceRow } from "../../db/repositories";
 import {
   listInvoices,
+  countInvoicesByStatus,
   getSubscription,
   updateSubscription,
   updateInvoiceStatus,
@@ -96,7 +97,14 @@ async function verifyPendingInvoice(
 export async function listMyInvoicesCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
-  const invoices = await listInvoices(DB, { userId });
+  const q = c.req.query("limit");
+  const limit = q && Number.isFinite(+q) ? +q : 50;
+  const o = c.req.query("offset");
+  const offset = o && Number.isFinite(+o) ? +o : 0;
+  const [invoices, { total }] = await Promise.all([
+    listInvoices(DB, { userId, limit, offset }),
+    countInvoicesByStatus(DB, { userId }),
+  ]);
 
   // Verify payment utk invoice pending yang masih belum lunas.
   // Sub status "pending" (upgrade baru) atau "expired" (renewal) — dua-duanya bisa lunas.
@@ -137,6 +145,6 @@ export async function listMyInvoicesCtl(c: Context<AppEnv>) {
 
   return c.json({
     success: true,
-    data: { invoices: out },
+    data: { invoices: out, total },
   });
 }

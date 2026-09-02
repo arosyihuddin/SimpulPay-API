@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, or, desc, sql, ilike } from "drizzle-orm";
 import { invoices, users } from "../schema";
 import type { Db } from "../client";
 
@@ -59,6 +59,7 @@ export async function listInvoices(
     userId?: string;
     subscriptionId?: string;
     status?: "pending" | "paid" | "overdue" | "failed";
+    q?: string;
     limit?: number;
     offset?: number;
   } = {},
@@ -67,6 +68,10 @@ export async function listInvoices(
   if (opts.userId) conds.push(eq(invoices.user_id, opts.userId));
   if (opts.subscriptionId) conds.push(eq(invoices.subscription_id, opts.subscriptionId));
   if (opts.status) conds.push(eq(invoices.status, opts.status));
+  if (opts.q) {
+    const like = `%${opts.q}%`;
+    conds.push(or(ilike(users.name, like), ilike(users.email, like)));
+  }
   const rows = await db
     .select({ i: invoices, u: users })
     .from(invoices)
@@ -104,12 +109,27 @@ export async function updateInvoiceByTransaction(
     .where(eq(invoices.transaction_id, transactionId));
 }
 
-export async function countInvoices(db: Db, userId?: string): Promise<number> {
+/** Total + count per status dalam 1 query (status filter diabaikan — hitungan global). */
+export async function countInvoicesByStatus(
+  db: Db,
+  o: { userId?: string; q?: string } = {},
+): Promise<{ total: number; pending: number; paid: number; overdue: number; failed: number }> {
   const conds = [];
-  if (userId) conds.push(eq(invoices.user_id, userId));
+  if (o.userId) conds.push(eq(invoices.user_id, o.userId));
+  if (o.q) {
+    const like = `%${o.q}%`;
+    conds.push(or(ilike(users.name, like), ilike(users.email, like)));
+  }
   const r = await db
-    .select({ c: sql<number>`count(*)::int` })
+    .select({
+      total: sql<number>`count(*)::int`,
+      pending: sql<number>`count(*) filter (where ${invoices.status} = 'pending')::int`,
+      paid: sql<number>`count(*) filter (where ${invoices.status} = 'paid')::int`,
+      overdue: sql<number>`count(*) filter (where ${invoices.status} = 'overdue')::int`,
+      failed: sql<number>`count(*) filter (where ${invoices.status} = 'failed')::int`,
+    })
     .from(invoices)
+    .leftJoin(users, eq(users.id, invoices.user_id))
     .where(conds.length ? and(...conds) : undefined);
-  return Number(r[0]?.c ?? 0);
+  return r[0] ?? { total: 0, pending: 0, paid: 0, overdue: 0, failed: 0 };
 }
