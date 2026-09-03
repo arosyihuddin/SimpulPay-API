@@ -107,7 +107,7 @@ export async function markInvoicePaidCtl(c: Context<AppEnv>) {
       },
     });
     await createNotifications(DB, c.env, {
-      type: "payment_success",
+      type: "invoice_paid",
       toUser: {
         userId: sub.user_id,
         title: "Pembayaran Berhasil",
