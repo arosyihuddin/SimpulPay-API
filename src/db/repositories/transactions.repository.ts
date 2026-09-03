@@ -38,12 +38,22 @@ export async function insertTransaction(
   });
 }
 
-export async function getTransaction(db: Db, id: string): Promise<TransactionRow | null> {
-  const rows = await db.select().from(transactions).where(eq(transactions.id, id));
+export async function getTransaction(
+  db: Db,
+  id: string,
+): Promise<TransactionRow | null> {
+  const rows = await db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.id, id));
   return rows[0] ?? null;
 }
 
-export async function updateTransactionStatus(db: Db, id: string, status: TransactionStatus) {
+export async function updateTransactionStatus(
+  db: Db,
+  id: string,
+  status: TransactionStatus,
+) {
   await db.update(transactions).set({ status }).where(eq(transactions.id, id));
 }
 
@@ -129,7 +139,10 @@ export async function paidTransactionsInRange(
   ];
   if (opts.userId) conds.push(eq(transactions.user_id, opts.userId));
   return db
-    .select({ amount: transactions.amount, created_at: transactions.created_at })
+    .select({
+      amount: transactions.amount,
+      created_at: transactions.created_at,
+    })
     .from(transactions)
     .where(and(...conds));
 }
@@ -139,8 +152,13 @@ export async function paidIncomeByMerchant(
   db: Db,
   from: number,
   userId?: string,
-): Promise<Array<{ merchant_id: string; merchant_name: string | null; total: number }>> {
-  const conds = [eq(transactions.status, "paid"), gte(transactions.created_at, from)];
+): Promise<
+  Array<{ merchant_id: string; merchant_name: string | null; total: number }>
+> {
+  const conds = [
+    eq(transactions.status, "paid"),
+    gte(transactions.created_at, from),
+  ];
   if (userId) conds.push(eq(transactions.user_id, userId));
   const rows = await db
     .select({
@@ -160,40 +178,17 @@ export async function paidIncomeByMerchant(
   }));
 }
 
-/** Top merchant by jumlah transaksi PAID dalam range, diurutkan terbanyak → paling sedikit. */
-export async function topPaidTransactionsByMerchant(
+export async function markTransactionsExpired(
   db: Db,
-  opts: { from: number; to: number; userId?: string; limit?: number },
-): Promise<
-  Array<{ merchant_id: string; merchant_name: string | null; total_transactions: number }>
-> {
-  const conds = [
-    eq(transactions.status, "paid"),
-    gte(transactions.created_at, opts.from),
-    lte(transactions.created_at, opts.to),
+  now = Date.now(),
+  merchantId?: string,
+) {
+  const conds: any[] = [
+    and(eq(transactions.status, "pending"), lt(transactions.expires_at, now)),
   ];
-  if (opts.userId) conds.push(eq(transactions.user_id, opts.userId));
-  const rows = await db
-    .select({
-      merchant_id: transactions.merchant_id,
-      merchant_name: merchants.name,
-      total_transactions: sql<number>`count(*)::int`,
-    })
-    .from(transactions)
-    .leftJoin(merchants, eq(transactions.merchant_id, merchants.id))
-    .where(and(...conds))
-    .groupBy(transactions.merchant_id, merchants.name)
-    .orderBy(desc(sql`count(*)`))
-    .limit(opts.limit ?? 5);
-  return rows.map((r) => ({
-    merchant_id: r.merchant_id ?? "",
-    merchant_name: r.merchant_name,
-    total_transactions: Number(r.total_transactions ?? 0),
-  }));
-}
-
-export async function markTransactionsExpired(db: Db, now = Date.now(), merchantId?: string) {
-  const conds: any[] = [and(eq(transactions.status, "pending"), lt(transactions.expires_at, now))];
   if (merchantId) conds.push(eq(transactions.merchant_id, merchantId));
-  await db.update(transactions).set({ status: "expired" }).where(and(...conds));
+  await db
+    .update(transactions)
+    .set({ status: "expired" })
+    .where(and(...conds));
 }

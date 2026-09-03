@@ -29,11 +29,19 @@ export async function listInvoicesCtl(c: Context<AppEnv>) {
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const offset = parseInt(c.req.query("offset") ?? "0", 10);
   const filter = { userId, subscriptionId, status, q };
-  const [invoices, { total, pending: pendingCount, paid: paidCount, overdue: overdueCount, failed: failedCount }] =
-    await Promise.all([
-      listInvoices(DB, { ...filter, limit, offset }),
-      countInvoicesByStatus(DB, {}),
-    ]);
+  const [
+    invoices,
+    {
+      total,
+      pending: pendingCount,
+      paid: paidCount,
+      overdue: overdueCount,
+      failed: failedCount,
+    },
+  ] = await Promise.all([
+    listInvoices(DB, { ...filter, limit, offset }),
+    countInvoicesByStatus(DB, {}),
+  ]);
   return c.json({
     success: true,
     data: {
@@ -80,6 +88,21 @@ export async function markInvoicePaidCtl(c: Context<AppEnv>) {
         user_id: sub.user_id,
         amount: inv.amount,
         paid_at: now,
+        by: "admin",
+      },
+    });
+    broadcast(c.env, {
+      type: "invoice_paid",
+      userId: sub.user_id,
+      data: {
+        invoice_id: id,
+        subscription: { ...sub, status: "active" },
+        user_id: sub.user_id,
+        amount: inv.amount,
+        period_end: inv.period_end,
+        period_start: inv.period_start,
+        paid_at: now,
+        status: "paid",
         by: "admin",
       },
     });

@@ -151,7 +151,7 @@ export async function transactionVolume(c: Context<AppEnv>) {
     (b) =>
       paid
         .filter((t) => t.created_at >= b.from && t.created_at <= b.to)
-        .reduce((s, t) => s + t.amount, 0) / 100,
+        .reduce((s, t) => s + t.amount, 0),
   );
 
   return c.json({

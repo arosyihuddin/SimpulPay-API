@@ -7,7 +7,10 @@ import {
   countSubscriptionsByStatus,
   getSubscription,
   updateSubscription,
+  getPlan,
 } from "../../db/repositories";
+import { broadcast } from "../../services/realtime";
+import { createNotifications } from "../../utils/notification.helper";
 
 export async function listSubscriptionsCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
@@ -18,10 +21,18 @@ export async function listSubscriptionsCtl(c: Context<AppEnv>) {
     | "cancelled"
     | "expired"
     | undefined;
-  const startFrom = c.req.query("start_from") ? Number(c.req.query("start_from")) : undefined;
-  const startTo = c.req.query("start_to") ? Number(c.req.query("start_to")) : undefined;
-  const endFrom = c.req.query("end_from") ? Number(c.req.query("end_from")) : undefined;
-  const endTo = c.req.query("end_to") ? Number(c.req.query("end_to")) : undefined;
+  const startFrom = c.req.query("start_from")
+    ? Number(c.req.query("start_from"))
+    : undefined;
+  const startTo = c.req.query("start_to")
+    ? Number(c.req.query("start_to"))
+    : undefined;
+  const endFrom = c.req.query("end_from")
+    ? Number(c.req.query("end_from"))
+    : undefined;
+  const endTo = c.req.query("end_to")
+    ? Number(c.req.query("end_to"))
+    : undefined;
   const includeFree = c.req.query("include_free") === "1";
   const q = c.req.query("q") || undefined;
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10) || 50, 100);
@@ -37,11 +48,18 @@ export async function listSubscriptionsCtl(c: Context<AppEnv>) {
     includeFree,
     q,
   };
-  const [subscriptions, { total, active: activeCount, cancelled: cancelledCount, expired: expiredCount }] =
-    await Promise.all([
-      listSubscriptions(DB, { ...filter, limit, offset }),
-      countSubscriptionsByStatus(DB, {}),
-    ]);
+  const [
+    subscriptions,
+    {
+      total,
+      active: activeCount,
+      cancelled: cancelledCount,
+      expired: expiredCount,
+    },
+  ] = await Promise.all([
+    listSubscriptions(DB, { ...filter, limit, offset }),
+    countSubscriptionsByStatus(DB, {}),
+  ]);
   return c.json({
     success: true,
     data: {
@@ -60,5 +78,27 @@ export async function cancelSubscriptionCtl(c: Context<AppEnv>) {
   const sub = await getSubscription(DB, id);
   if (!sub) bad("Subscription tidak ditemukan", 404);
   await updateSubscription(DB, id, { status: "cancelled" });
+  const freePlan = await getPlan(DB, "p_free");
+  broadcast(c.env, {
+    type: "subscription_cancelled",
+    userId: sub.user_id,
+    data: {
+      plan_id: "p_free",
+      plan_name: freePlan?.name,
+      max_merchant: freePlan?.max_merchants,
+      daily_paid_limit: freePlan?.daily_paid_limit,
+      type: freePlan?.type,
+      status: "active",
+      created_at: Date.now(),
+    },
+  });
+  createNotifications(DB, c.env, {
+    type: "subscription_cancelled",
+    toUser: {
+      userId: sub.user_id,
+      title: "Langganan Dibatalkan",
+      message: "Langganan Anda telah dibatalkan",
+    },
+  });
   return c.json({ success: true });
 }

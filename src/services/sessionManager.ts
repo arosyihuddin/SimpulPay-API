@@ -1,4 +1,5 @@
 import { saveGoBizSession, loadGoBizSession, updateMerchant, insertLog } from '../db/repositories';
+import { logger } from '../utils/logger';
 import type { Db } from '../db/client';
 
 const GOBIZ_TOKEN_URL = 'https://api.gobiz.co.id/goid/token';
@@ -79,7 +80,7 @@ export async function saveSession(DB: Db, merchantId: string, session: Session):
     expires_at: session.expires_at ?? null,
   };
   await saveGoBizSession(DB, merchantId, data as Record<string, unknown>);
-  console.log('[SessionManager] Sesi berhasil diperbarui dan disimpan ke database.');
+  logger.info('[SessionManager] Sesi berhasil diperbarui dan disimpan ke database.');
 }
 
 export async function loadSession(DB: Db, merchantId: string): Promise<Session | null> {
@@ -100,11 +101,11 @@ export function isExpired(session: Session | null | undefined): boolean {
 export async function refreshSession(DB: Db, merchantId: string): Promise<Session | null> {
   const session = await loadSession(DB, merchantId);
   if (!session || !session.refresh_token) {
-    console.log('[SessionManager] Refresh token tidak ditemukan. Diperlukan login ulang (Settings → Login GoBiz).');
+    logger.warn('[SessionManager] Refresh token tidak ditemukan. Diperlukan login ulang (Settings → Login GoBiz).');
     return null;
   }
 
-  console.log('[SessionManager] Mengirimkan request auto-refresh token ke GoBiz...');
+  logger.info('[SessionManager] Mengirimkan request auto-refresh token ke GoBiz...');
   try {
     const res = await fetch(GOBIZ_TOKEN_URL, {
       method: 'POST',
@@ -119,7 +120,7 @@ export async function refreshSession(DB: Db, merchantId: string): Promise<Sessio
     const data = json?.data ?? json;
 
     if (!data?.access_token) {
-      console.log(`[SessionManager] Auto-refresh token GAGAL: ${JSON.stringify(json)}`);
+      logger.warn(`[SessionManager] Auto-refresh token GAGAL: ${JSON.stringify(json)}`);
       return null;
     }
 
@@ -129,11 +130,11 @@ export async function refreshSession(DB: Db, merchantId: string): Promise<Sessio
       extra: { ...session },
     });
     await saveSession(DB, merchantId, updated);
-    console.log('[SessionManager] Auto-refresh token BERHASIL! Token baru telah ditulis ke database.');
+    logger.info('[SessionManager] Auto-refresh token BERHASIL! Token baru telah ditulis ke database.');
     return updated;
   } catch (err) {
     const msg = (err as Error).message;
-    console.log(`[SessionManager] Auto-refresh token GAGAL: ${msg}`);
+    logger.warn(`[SessionManager] Auto-refresh token GAGAL: ${msg}`);
     return null;
   }
 }
@@ -178,36 +179,36 @@ export async function getValidHeaders(
     const now = Date.now();
     if (now - lastMissingWarn > 60_000) {
       lastMissingWarn = now;
-      console.log('[SessionManager] PERINGATAN: Sesi GoPay belum tersedia. Login OTP lewat dashboard (Settings → Login GoBiz).');
+      logger.warn('[SessionManager] PERINGATAN: Sesi GoPay belum tersedia. Login OTP lewat dashboard (Settings → Login GoBiz).');
     }
-    await updateMerchant(DB, merchantId, { status: "inactive" }).catch(() => {});
+    await updateMerchant(DB, merchantId, { status: "inactive" }).catch(() => { });
     return null;
   }
 
   if (isExpired(session)) {
-    console.log('[SessionManager] Token terdeteksi kadaluwarsa, mencoba refresh otomatis...');
+    logger.info('[SessionManager] Token terdeteksi kadaluwarsa, mencoba refresh otomatis...');
     const refreshed = await refreshSession(DB, merchantId);
     if (refreshed) session = refreshed;
   }
 
   if (!session.access_token) {
-    await updateMerchant(DB, merchantId, { status: "inactive" }).catch(() => {});
+    await updateMerchant(DB, merchantId, { status: "inactive" }).catch(() => { });
     return null;
   }
 
   // verify=true → tes token ke GoBiz sekali. Gagal → refresh sekali, balikin headers baru.
   if (verify && !(await pingSession(buildHeaders(session, userAgent)))) {
-    console.log('[SessionManager] Token invalid di server, mencoba refresh...');
+    logger.warn('[SessionManager] Token invalid di server, mencoba refresh...');
     const refreshed = await refreshSession(DB, merchantId);
     if (!refreshed) {
       await updateMerchant(DB, merchantId, {
         status: "inactive",
-      }).catch(() => {});
+      }).catch(() => { });
       await insertLog(
         DB,
         "WARNING",
         `Sesi GoBiz invalid, merchant ${merchantId} dinonaktifkan`,
-      ).catch(() => {});
+      ).catch(() => { });
       return null;
     }
     return buildHeaders(refreshed, userAgent);
