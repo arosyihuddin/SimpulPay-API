@@ -105,8 +105,8 @@ export async function createUserCtl(c: Context<AppEnv>) {
     role: role as "admin" | "customer",
   });
 
-  // Plan optional — bikin subscription + invoice pertama
-  if (body?.plan_id) {
+  // Plan optional — bikin subscription + invoice pertama (kecuali free, sudah default)
+  if (body?.plan_id && body.plan_id !== "p_free") {
     const plan = await getPlan(DB, body.plan_id);
     if (!plan) bad("Plan tidak ditemukan", 404);
     const subId = "sub_" + crypto.randomUUID().slice(0, 8);

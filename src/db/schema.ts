@@ -67,7 +67,9 @@ export const transactions = pgTable("transactions", {
   merchant_id: text("merchant_id").references(() => merchants.id, {
     onDelete: "set null",
   }),
-  user_id: text("user_id").references(() => users.id),
+  user_id: text("user_id").references(() => users.id, {
+    onDelete: "cascade",
+  }),
   created_at: bigint("created_at", { mode: "number" }).notNull(),
   expires_at: bigint("expires_at", { mode: "number" }).notNull(),
 });
@@ -120,7 +122,7 @@ export const merchants = pgTable("merchants", {
   id: text("id").primaryKey(),
   user_id: text("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   type: merchantTypeEnum("type").notNull().default("gopay"),
   name: text("name").notNull(),
   merchant_id: text("merchant_id"),
@@ -136,7 +138,7 @@ export const apiKeys = pgTable("api_keys", {
   id: text("id").primaryKey(),
   user_id: text("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   merchant_id: text("merchant_id").references(() => merchants.id, {
     onDelete: "cascade",
   }),
@@ -151,7 +153,7 @@ export const notifications = pgTable("notifications", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   user_id: text("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   merchant_id: text("merchant_id").references(() => merchants.id, {
     onDelete: "cascade",
   }),
@@ -180,7 +182,7 @@ export const subscriptions = pgTable("subscriptions", {
   id: text("id").primaryKey(),
   user_id: text("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   plan_id: text("plan_id")
     .notNull()
     .references(() => plans.id),
@@ -210,7 +212,7 @@ export const announcementReads = pgTable(
       .references(() => announcements.id),
     user_id: text("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: "cascade" }),
     read_at: bigint("read_at", { mode: "number" }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.announcement_id, t.user_id] })],
@@ -220,11 +222,13 @@ export const invoices = pgTable("invoices", {
   id: text("id").primaryKey(),
   user_id: text("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   subscription_id: text("subscription_id")
     .notNull()
-    .references(() => subscriptions.id),
-  transaction_id: text("transaction_id").references(() => transactions.id),
+    .references(() => subscriptions.id, { onDelete: "cascade" }),
+  transaction_id: text("transaction_id").references(() => transactions.id, {
+    onDelete: "cascade",
+  }),
   amount: integer("amount").notNull(),
   status: invoiceStatusEnum("status").notNull().default("pending"),
   period_start: bigint("period_start", { mode: "number" }).notNull(),
@@ -237,7 +241,7 @@ export const webhookQueue = pgTable("webhook_queue", {
   id: text("id").primaryKey(),
   user_id: text("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   payload: text("payload").notNull(),
   attempt: integer("attempt").notNull().default(0),
   next_retry_at: bigint("next_retry_at", { mode: "number" }).notNull(),
