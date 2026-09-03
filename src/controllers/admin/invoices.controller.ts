@@ -153,6 +153,8 @@ export async function rejectInvoiceCtl(c: Context<AppEnv>) {
       userId: sub.user_id,
       data: {
         subscription_id: sub.id,
+        invoice_id: id,
+        status: "failed",
         plan_id: sub.plan_id,
         cancelled_at: Date.now(),
       },
