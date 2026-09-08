@@ -1,8 +1,8 @@
 {
-  "name": "gomerch-api",
+  "name": "simpulpay",
   "version": "1.0.0",
   "type": "module",
-  "description": "GoPay Merchant Payment Gateway & QRIS Verification API (Cloudflare Workers + Postgres via Hyperdrive)",
+  "description": "GoPay Merchant Payment Gateway & QRIS Verification (Cloudflare Workers + Postgres via Hyperdrive)",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",

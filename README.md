@@ -1,4 +1,4 @@
-# GoMerch API
+# SimpulPay
 
 Gateway pembayaran QRIS GoPay/GoBiz — generate QRIS dinamis EMVCo, verifikasi pembayaran via API Gojek merchant, anti double-claim.
 
@@ -7,7 +7,7 @@ Gateway pembayaran QRIS GoPay/GoBiz — generate QRIS dinamis EMVCo, verifikasi 
 - **Auth:** API key utk endpoint publik, cookie httpOnly session utk admin
 - **Login GoBiz:** OTP lewat dashboard (Settings → Login GoBiz)
 
-> Frontend admin SPA dipisah di repo **GoMerch-Client** (React + Vite).
+> Frontend admin SPA dipisah di repo **SimpulPay-Client** (React + Vite).
 
 ## Struktur
 

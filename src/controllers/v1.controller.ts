@@ -29,7 +29,7 @@ import { checkDailyPaidLimit } from "../services/limits";
 
 export async function health(c: Context<AppEnv>) {
   return c.json(
-    ok({ message: "Layanan GoMerch API Berfungsi Normal", timestamp: new Date() }),
+    ok({ message: "Layanan SimpulPay Berfungsi Normal", timestamp: new Date() }),
   );
 }
 

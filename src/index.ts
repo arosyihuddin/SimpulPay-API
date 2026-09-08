@@ -66,7 +66,7 @@ app.route("/admin", adminRoutes);
 app.doc("/docs/json", {
   openapi: "3.0.3",
   info: {
-    title: "GoMerch API",
+    title: "SimpulPay",
     version: "1.0.0",
     description:
       "Payment Gateway & QRIS Verification — GoPay/GoBiz. Generate QRIS dinamis EMVCo, verifikasi pembayaran via API Gojek merchant, anti double-claim.\n\nFlow: `POST /api/v1/qris` → dapatkan `qris_code` → client render QR → verifikasi pembayaran otomatis dari backend.",
