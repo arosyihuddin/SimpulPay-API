@@ -16,6 +16,7 @@ export class AppHub implements DurableObject {
   private state: DurableObjectState;
   private env: Env;
   private pooling = false;
+  private lastPoolingActive = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
     this.state = ctx;
@@ -87,7 +88,13 @@ export class AppHub implements DurableObject {
     const handle = createDb(this.env);
     try {
       const rows = await this.getPendingRows(handle.db);
-      if (rows.length === 0) return;
+      if (rows.length === 0) {
+        if (this.lastPoolingActive) {
+          this.broadcast("pooling_status", { active: false, transactions: 0, merchants: 0 }, undefined, "admin");
+          this.lastPoolingActive = false;
+        }
+        return;
+      }
 
       const merchantIds = new Set<string>();
       const userIds = new Set<string>();
@@ -95,6 +102,9 @@ export class AppHub implements DurableObject {
         if (t.merchant_id) merchantIds.add(t.merchant_id);
         if (t.user_id) userIds.add(t.user_id);
       }
+
+      this.lastPoolingActive = true;
+      this.broadcast("pooling_status", { active: true, transactions: rows.length, merchants: merchantIds.size }, undefined, "admin");
 
       for (const merchantId of merchantIds) {
         await verifyMerchantPending(handle.db, this.env, merchantId);
@@ -105,6 +115,9 @@ export class AppHub implements DurableObject {
         const next = Date.now() + interval;
         const cur = await this.state.storage.getAlarm();
         if (cur == null || cur > next) await this.state.storage.setAlarm(next);
+      } else {
+        this.broadcast("pooling_status", { active: false, transactions: 0, merchants: 0 }, undefined, "admin");
+        this.lastPoolingActive = false;
       }
     } finally {
       this.pooling = false;
