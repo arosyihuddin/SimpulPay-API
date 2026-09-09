@@ -9,7 +9,7 @@ import {
   updateSubscription,
   getPlan,
 } from "../../db/repositories";
-import { cancelSubExpiry } from "../../durable_objects/subTimer";
+import { cancelSubExpiry, scheduleSubExpiry } from "../../durable_objects/subTimer";
 import { createNotifications } from "../../utils/notification.helper";
 import { broadcast } from "../../services/realtime";
 
@@ -103,4 +103,37 @@ export async function cancelSubscriptionCtl(c: Context<AppEnv>) {
     },
   });
   return c.json({ success: true });
+}
+/**
+ * POST /subscribers/resync-timers
+ * Backfill alarm SubTimer utk semua sub aktif yg punya ends_at.
+ * Dipakai sekali pas migrasi cron→DO + kapan pun alarm dicurigai hilang.
+ * Idempoten: schedule baru timpa lama; ends_at lewat → alarm langsung tembak.
+ */
+export async function resyncSubTimersCtl(c: Context<AppEnv>) {
+  const DB = getDb(c);
+  const now = Date.now();
+  let scheduled = 0;
+  let immediate = 0;
+  for (let offset = 0; ; offset += 200) {
+    const rows = await listSubscriptions(DB, {
+      status: "active",
+      includeFree: true,
+      limit: 200,
+      offset,
+    });
+    if (rows.length === 0) break;
+    for (const s of rows) {
+      if (!s.ends_at) continue;
+      await scheduleSubExpiry(c.env, {
+        subId: s.id,
+        userId: s.user_id,
+        endsAt: s.ends_at,
+      });
+      scheduled++;
+      if (s.ends_at <= now) immediate++;
+    }
+    if (rows.length < 200) break;
+  }
+  return c.json({ success: true, data: { scheduled, immediate } });
 }

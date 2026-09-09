@@ -15,6 +15,7 @@ import {
 import {
   listSubscriptionsCtl,
   cancelSubscriptionCtl,
+  resyncSubTimersCtl,
 } from "../controllers/admin/subscriptions.controller";
 import {
   listInvoicesCtl,
@@ -46,6 +47,7 @@ adminRoutes.post("/plans", ...adminAuth, createPlanCtl);
 adminRoutes.patch("/plans/:id", ...adminAuth, updatePlanCtl);
 adminRoutes.delete("/plans/:id", ...adminAuth, deletePlanCtl);
 adminRoutes.get("/subscribers", ...adminAuth, listSubscriptionsCtl);
+adminRoutes.post("/subscribers/resync-timers", ...adminAuth, resyncSubTimersCtl);
 adminRoutes.post(
   "/subscribers/:id/cancel",
   ...adminAuth,
