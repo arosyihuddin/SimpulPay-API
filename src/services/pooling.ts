@@ -32,6 +32,7 @@ export async function verifyMerchantPending(
     status: "pending",
     limit: MAX_BATCH,
   });
+  logger.debug(`Merchant ID ${merchantId} transaksi ${txs.length}`);
   if (txs.length === 0) return;
 
   const now = Date.now();

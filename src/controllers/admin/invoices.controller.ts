@@ -15,6 +15,7 @@ import {
   updateSubscription,
   activateSubscriptionSwap,
   insertLog,
+  updateTransactionStatus,
 } from "../../db/repositories";
 
 export async function listInvoicesCtl(c: Context<AppEnv>) {
@@ -67,6 +68,7 @@ export async function markInvoicePaidCtl(c: Context<AppEnv>) {
   if (!inv) bad("Invoice tidak ditemukan", 404);
   const now = Date.now();
   await updateInvoiceStatus(DB, id, "paid", now);
+  if (inv.transaction_id) await updateTransactionStatus(DB, inv.transaction_id, "paid");
   const sub = await getSubscription(DB, inv.subscription_id);
   if (sub && (sub.status === "pending" || sub.status === "expired")) {
     const endsAt =
@@ -130,6 +132,7 @@ export async function rejectInvoiceCtl(c: Context<AppEnv>) {
   const inv = await getInvoice(DB, id);
   if (!inv) bad("Invoice tidak ditemukan", 404);
   await updateInvoiceStatus(DB, id, "failed");
+  if (inv.transaction_id) await updateTransactionStatus(DB, inv.transaction_id, "expired");
   const sub = await getSubscription(DB, inv.subscription_id);
   if (sub && sub.status === "pending") {
     await updateSubscription(DB, sub.id, { status: "cancelled" });

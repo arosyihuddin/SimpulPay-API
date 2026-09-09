@@ -79,7 +79,6 @@ export default {
   fetch: app.fetch,
 
   async scheduled(event: { cron: string }, env: Env, _ctx: ExecutionContext) {
-    setLogLevel(env.LOG_LEVEL);
     const { db: DB, client: DBClient } = createDb(env);
     if (event.cron === "* * * * *") {
       // Pengganti cron hourly: sapu klaim >24 jam tiap tick (murah, no-op bila kosong).

@@ -15,6 +15,7 @@ const tagScope = (s: string) => `s:${s}`;
 export class AppHub implements DurableObject {
   private state: DurableObjectState;
   private env: Env;
+  private pooling = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
     this.state = ctx;
@@ -77,8 +78,12 @@ export class AppHub implements DurableObject {
   }
 
   /** 1 round pooling: verify semua pending, schedule alarm kalo masih ada pending.
-   *  Interval alarm = min pooling_interval dari user yg punya pending. */
+   *  Interval alarm = min pooling_interval dari user yg punya pending.
+   *  Guard pooling flag: alarm 1-8 dtk + /start-pooling + cron tiap menit bisa overlap
+   *  (verify Gojek lambat) → tanpa guard = dobel call + SQLITE_BUSY di Miniflare. */
   private async pool() {
+    if (this.pooling) return;
+    this.pooling = true;
     const handle = createDb(this.env);
     try {
       const rows = await this.getPendingRows(handle.db);
@@ -97,9 +102,12 @@ export class AppHub implements DurableObject {
 
       if (await hasPending(handle.db)) {
         const interval = await this.getIntervalMs(handle.db, userIds);
-        await this.state.storage.setAlarm(Date.now() + interval);
+        const next = Date.now() + interval;
+        const cur = await this.state.storage.getAlarm();
+        if (cur == null || cur > next) await this.state.storage.setAlarm(next);
       }
     } finally {
+      this.pooling = false;
       await handle.client.end().catch(() => {});
     }
   }

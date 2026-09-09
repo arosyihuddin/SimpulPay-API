@@ -9,7 +9,7 @@ import {
 import { broadcast } from "../services/realtime";
 import { createNotifications } from "../utils/notification.helper";
 import type { Env } from "../types";
-import { logger, setLogLevel } from "../utils/logger";
+import { logger } from "../utils/logger";
 
 export type SubExpiryJob = {
   subId: string;
@@ -29,7 +29,6 @@ export class SubTimer implements DurableObject {
   }
 
   async fetch(request: Request): Promise<Response> {
-    setLogLevel(this.env.LOG_LEVEL);
     const url = new URL(request.url);
     if (url.pathname === "/schedule" && request.method === "POST") {
       const b = (await request.json()) as Partial<SubExpiryJob>;
@@ -42,22 +41,17 @@ export class SubTimer implements DurableObject {
       await this.state.storage.setAlarm(Math.max(Date.now(), endsAt));
       return new Response("ok");
     }
-    if (url.pathname === "/cancel" && request.method === "POST") {
-      await this.state.storage.delete("job");
-      await this.state.storage.deleteAlarm();
-      return new Response("ok");
-    }
     return new Response("not found", { status: 404 });
   }
 
   async alarm() {
-    setLogLevel(this.env.LOG_LEVEL);
     const job = await this.state.storage.get<SubExpiryJob>("job");
     if (!job) return;
     const handle = createDb(this.env);
     try {
       const sub = await getSubscription(handle.db, job.subId);
       if (!sub || sub.status !== "active") return;
+      logger.debug(`[Sub-Pool] Subscriptions UserId ${sub.user_id}`);
       const endsAt = sub.ends_at ?? job.endsAt;
       if (!endsAt) {
         await this.state.storage.delete("job");
@@ -110,7 +104,9 @@ export async function scheduleSubExpiry(
   job: SubExpiryJob,
 ): Promise<void> {
   try {
-    const stub = env.SUB_TIMER.get(env.SUB_TIMER.idFromName(`sub_${job.subId}`));
+    const stub = env.SUB_TIMER.get(
+      env.SUB_TIMER.idFromName(`sub_${job.subId}`),
+    );
     await stub.fetch("http://internal/schedule", {
       method: "POST",
       body: JSON.stringify(job),
@@ -120,15 +116,4 @@ export async function scheduleSubExpiry(
       `[subtimer] schedule gagal ${job.subId}: ${(err as Error).message}`,
     );
   }
-}
-
-/** Batalkan timer (admin cancel). Alarm basi yg lolos tetap no-op via cek status DB. */
-export async function cancelSubExpiry(
-  env: Env,
-  subId: string,
-): Promise<void> {
-  try {
-    const stub = env.SUB_TIMER.get(env.SUB_TIMER.idFromName(`sub_${subId}`));
-    await stub.fetch("http://internal/cancel", { method: "POST" });
-  } catch {}
 }

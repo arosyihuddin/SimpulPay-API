@@ -9,7 +9,7 @@ import {
   updateSubscription,
   getPlan,
 } from "../../db/repositories";
-import { cancelSubExpiry, scheduleSubExpiry } from "../../durable_objects/subTimer";
+import { scheduleSubExpiry } from "../../durable_objects/subTimer";
 import { createNotifications } from "../../utils/notification.helper";
 import { broadcast } from "../../services/realtime";
 
@@ -79,7 +79,6 @@ export async function cancelSubscriptionCtl(c: Context<AppEnv>) {
   const sub = await getSubscription(DB, id);
   if (!sub) bad("Subscription tidak ditemukan", 404);
   await updateSubscription(DB, id, { status: "cancelled" });
-  await cancelSubExpiry(c.env, id);
   const freePlan = await getPlan(DB, "p_free");
   broadcast(c.env, {
     type: "subscription_cancelled",
