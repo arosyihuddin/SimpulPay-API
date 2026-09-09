@@ -123,7 +123,12 @@ export const maintenanceGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
     path === "/api/health"
   )
     return next();
-  const maintenance = await getSystemSetting(getDb(c), "maintenance");
+  let maintenance: string | null = null;
+  try {
+    maintenance = await getSystemSetting(getDb(c), "maintenance");
+  } catch {
+    return next();
+  }
   if (maintenance !== "true") return next();
   const token = cookieToken(c);
   if (token) {
