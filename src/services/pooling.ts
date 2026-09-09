@@ -47,7 +47,6 @@ export async function verifyMerchantPending(
     return;
   }
 
-
   for (const t of alive) {
     try {
       const matched = await verifyPayment(
@@ -73,7 +72,12 @@ export async function verifyMerchantPending(
             if (sub && (sub.status === "pending" || sub.status === "expired")) {
               const endsAt = now + MONTH_MS;
               await activateSubscriptionSwap(DB, sub.id, sub.user_id, endsAt);
-              await scheduleSubExpiry(env, { subId: sub.id, userId: sub.user_id, endsAt, invoiceId: inv.id });
+              await scheduleSubExpiry(env, {
+                subId: sub.id,
+                userId: sub.user_id,
+                endsAt,
+                invoiceId: inv.id,
+              });
             }
             const title = "Pembayaran Berhasil";
             const message = `Subscription lunas — Rp${inv.amount.toLocaleString("id-ID")}`;
@@ -144,7 +148,12 @@ export async function verifyMerchantPending(
   }
 }
 /** TX expired → tandai expired + gagalkan invoice + batalkan sub pending. Pengganti cron hourly. */
-async function expireTx(DB: Db, env: Env, t: { id: string; user_id?: string | null; type?: string | null }, merchantId: string): Promise<void> {
+async function expireTx(
+  DB: Db,
+  env: Env,
+  t: { id: string; user_id?: string | null; type?: string | null },
+  merchantId: string,
+): Promise<void> {
   await updateTransactionStatus(DB, t.id, "expired");
   if (t.type === "subscription") {
     await updateInvoiceByTransaction(DB, t.id, "failed");
@@ -152,7 +161,13 @@ async function expireTx(DB: Db, env: Env, t: { id: string; user_id?: string | nu
     const sub = inv ? await getSubscription(DB, inv.subscription_id) : null;
     if (sub && sub.status === "pending") {
       await updateSubscription(DB, sub.id, { status: "cancelled" });
-      await insertLog(DB, "INFO", `Pending sub ${sub.id} dibatalkan (QRIS expired)`, null, sub.user_id);
+      await insertLog(
+        DB,
+        "INFO",
+        `Pending sub ${sub.id} dibatalkan (QRIS expired)`,
+        null,
+        sub.user_id,
+      );
     }
   }
   if (t.user_id) {
