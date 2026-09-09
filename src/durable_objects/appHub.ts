@@ -84,6 +84,7 @@ export class AppHub implements DurableObject {
    *  Guard pooling flag: alarm 1-8 dtk + /start-pooling + cron tiap menit bisa overlap
    *  (verify Gojek lambat) → tanpa guard = dobel call + SQLITE_BUSY di Miniflare. */
   private async pool() {
+    logger.debug(`[POOLING] Start Pooling...`);
     if (this.pooling) return;
     this.pooling = true;
     const handle = createDb(this.env);
@@ -91,9 +92,15 @@ export class AppHub implements DurableObject {
       const rows = await this.getPendingRows(handle.db);
       if (rows.length === 0) {
         if (this.lastPoolingActive) {
-          this.broadcast("pooling_status", { active: false, transactions: 0, merchants: 0 }, undefined, "admin");
+          this.broadcast(
+            "pooling_status",
+            { active: false, transactions: 0, merchants: 0 },
+            undefined,
+            "admin",
+          );
           this.lastPoolingActive = false;
         }
+        logger.debug(`No Pending transactions`);
         return;
       }
 
@@ -105,7 +112,16 @@ export class AppHub implements DurableObject {
       }
 
       this.lastPoolingActive = true;
-      this.broadcast("pooling_status", { active: true, transactions: rows.length, merchants: merchantIds.size }, undefined, "admin");
+      this.broadcast(
+        "pooling_status",
+        {
+          active: true,
+          transactions: rows.length,
+          merchants: merchantIds.size,
+        },
+        undefined,
+        "admin",
+      );
 
       for (const merchantId of merchantIds) {
         await verifyMerchantPending(handle.db, this.env, merchantId);
@@ -117,7 +133,12 @@ export class AppHub implements DurableObject {
         const cur = await this.state.storage.getAlarm();
         if (cur == null || cur > next) await this.state.storage.setAlarm(next);
       } else {
-        this.broadcast("pooling_status", { active: false, transactions: 0, merchants: 0 }, undefined, "admin");
+        this.broadcast(
+          "pooling_status",
+          { active: false, transactions: 0, merchants: 0 },
+          undefined,
+          "admin",
+        );
         this.lastPoolingActive = false;
       }
     } finally {

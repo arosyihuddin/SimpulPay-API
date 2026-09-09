@@ -5,7 +5,7 @@
   "description": "GoPay Merchant Payment Gateway & QRIS Verification (Cloudflare Workers + Postgres via Hyperdrive)",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --test-scheduled",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
