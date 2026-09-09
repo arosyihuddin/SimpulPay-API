@@ -3,10 +3,15 @@ import type { AppEnv } from "../types";
 import { getDb, type Db } from "../db/client";
 import {
   generateDynamicQRIS,
-  qrisExpiryMs,
   uniqueAmount,
   getQrisStatic,
 } from "../services/qris";
+import {
+  merchantSettings,
+  qrisExpiryMs,
+  amountLimitError,
+  feeAmount,
+} from "../services/settings";
 import { verifyPayment } from "../services/gojek";
 import {
   insertTransaction,
@@ -16,6 +21,7 @@ import {
   insertLog,
   getMerchant,
   listMerchantsByUser,
+  feeOf,
 } from "../db/repositories";
 import { fail, ok } from "../middleware/errorHandler";
 import { checkDailyPaidLimit } from "../services/limits";
@@ -37,7 +43,7 @@ async function pickRandomActiveMerchant(DB: Db, userId: string): Promise<string>
 
 export async function health(c: Context<AppEnv>) {
   return c.json(
-    ok({ message: "Layanan SimpulPay Berfungsi Normal", timestamp: new Date() }),
+    ok({ message: "Layanan SimpulPay Berfungsi Normal", timestamp: Date.now() }),
   );
 }
 
@@ -55,17 +61,21 @@ export async function createQris(c: Context<AppEnv>) {
   if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
     fail(400, "Nominal pembayaran tidak valid");
   }
+  const cfg = await merchantSettings(DB, merchantId);
+  const base = parseInt(String(amount), 10);
+  const limitErr = amountLimitError(base, cfg);
+  if (limitErr) fail(400, limitErr);
   const st = await getQrisStatic(DB, merchantId);
   if (!st) fail(500, "QRIS static belum dikonfigurasi. Upload QRIS static di Settings → Konfigurasi QRIS.");
   const blocked = await checkDailyPaidLimit(DB, merchantId);
   if (blocked) fail(429, `Batas transaksi harian tercapai (${blocked.used}/${blocked.limit}). Silakan upgrade plan atau coba besok.`);
-  const base = parseInt(String(amount), 10);
-  const { code, pay } = uniqueAmount(base);
+  const fee = feeAmount(base, cfg);
+  const { code, pay } = uniqueAmount(base + fee);
   const dynamicCode = generateDynamicQRIS(st, pay);
   const qrisId = Math.random().toString(36).substring(2, 10);
   const trxId = "TRX-" + Math.random().toString(36).substring(2, 10).toUpperCase();
   const now = Date.now();
-  const expiresAt = now + qrisExpiryMs();
+  const expiresAt = now + qrisExpiryMs(cfg);
   await insertTransaction(DB, {
     id: qrisId,
     code: dynamicCode!,
@@ -87,9 +97,10 @@ export async function createQris(c: Context<AppEnv>) {
         merchant_id: merchantId,
         qris_code: dynamicCode,
         amount: base,
+        fee_amount: fee,
         unique_code: code,
         amount_to_pay: pay,
-        expires_at: new Date(expiresAt).toISOString(),
+        expires_at: expiresAt,
       },
     }),
   );
@@ -114,6 +125,7 @@ export async function getQris(c: Context<AppEnv>) {
         trx_id: qris.trx_id,
         amount: qris.amount,
         base_amount: qris.base_amount,
+        fee_amount: feeOf(qris),
         unique_code: qris.unique_code,
         status: expired ? "expired" : qris.status,
         created_at: qris.created_at,

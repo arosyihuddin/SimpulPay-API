@@ -1,6 +1,5 @@
 import { getMerchant } from '../db/repositories';
 import type { Db } from '../db/client';
-const QRIS_EXPIRY_MS = 2 * 60 * 1000;
 
 export async function getQrisStatic(DB: Db, merchantId: string): Promise<string> {
   return (await getMerchant(DB, merchantId))?.qris_static || '';
@@ -95,9 +94,6 @@ export function generateDynamicQRIS(staticTemplate: string, amount: unknown) {
   return result + checksum;
 }
 
-export function qrisExpiryMs() {
-  return QRIS_EXPIRY_MS;
-}
 
 export function uniqueAmount(base: number): { base: number; code: number; pay: number } {
   const maxCode = Math.min(100, Math.max(9, Math.round(base * 0.01)));

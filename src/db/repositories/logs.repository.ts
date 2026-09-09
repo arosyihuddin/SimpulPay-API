@@ -7,7 +7,7 @@ export type LogRow = typeof logs.$inferSelect;
 export async function insertLog(db: Db, type: string, message: string, details: unknown = null, userId?: string | null) {
   const detailsJson = details === null ? null : JSON.stringify(details);
   await db.insert(logs).values({
-    timestamp: new Date().toISOString(),
+    timestamp: String(Date.now()),
     type,
     message,
     details_json: detailsJson,

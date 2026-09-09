@@ -6,6 +6,13 @@ export type TransactionRow = typeof transactions.$inferSelect;
 
 export type TransactionStatus = "pending" | "paid" | "expired";
 
+/** ponytail: fee derive pay-base-code, no kolom DB. Upgrade ke kolom fee_amount saat butuh SUM fee / komponen charge baru (pajak/diskon). */
+export function feeOf(t: { amount: number; base_amount: number | null; unique_code: number | null }): number {
+  const base = t.base_amount ?? 0;
+  if (base <= 0) return 0;
+  return Math.max(0, t.amount - base - (t.unique_code ?? 0));
+}
+
 export async function insertTransaction(
   db: Db,
   r: {

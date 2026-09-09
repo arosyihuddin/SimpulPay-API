@@ -17,10 +17,15 @@ import { loadSession, refreshSession } from "../../services/sessionManager";
 import {
   parseQrisTlv,
   generateDynamicQRIS,
-  qrisExpiryMs,
   uniqueAmount,
   getQrisStatic,
 } from "../../services/qris";
+import {
+  merchantSettings,
+  qrisExpiryMs,
+  amountLimitError,
+  feeAmount,
+} from "../../services/settings";
 import { decodeQRCodeFromImage } from "../../services/qrDecoder";
 import { formatTransaction } from "../../services/gojek";
 import { getValidHeaders } from "../../services/sessionManager";
@@ -190,6 +195,9 @@ export async function createQris(c: Context<AppEnv>) {
   const body = await c.req.json();
   const base = parseInt(String(body?.amount ?? ""), 10);
   if (Number.isNaN(base) || base <= 0) bad("Nominal pembayaran tidak valid");
+  const cfg = await merchantSettings(DB, merchant.id);
+  const limitErr = amountLimitError(base, cfg);
+  if (limitErr) bad(limitErr);
   const staticTemplate = await getQrisStatic(DB, merchant.id);
   if (!staticTemplate)
     bad(
@@ -202,13 +210,14 @@ export async function createQris(c: Context<AppEnv>) {
       `Batas transaksi harian tercapai (${blocked.used}/${blocked.limit}). Silakan upgrade plan atau coba besok.`,
       429,
     );
-  const { code, pay } = uniqueAmount(base);
+  const fee = feeAmount(base, cfg);
+  const { code, pay } = uniqueAmount(base + fee);
   const dynamicCode = generateDynamicQRIS(staticTemplate, pay);
   const qrisId = Math.random().toString(36).substring(2, 10);
   const trxId =
     "TRX-" + Math.random().toString(36).substring(2, 10).toUpperCase();
   const now = Date.now();
-  const expiresAt = now + qrisExpiryMs();
+  const expiresAt = now + qrisExpiryMs(cfg);
   await insertTransaction(DB, {
     id: qrisId,
     code: dynamicCode!,
@@ -243,7 +252,7 @@ export async function createQris(c: Context<AppEnv>) {
       merchantId: merchant.id,
       amount_to_pay: pay,
       status: "pending",
-      expires_at: new Date(expiresAt).toISOString(),
+      expires_at: expiresAt,
     },
   });
   broadcast(c.env, {
@@ -264,9 +273,10 @@ export async function createQris(c: Context<AppEnv>) {
       trx_id: trxId,
       qris_code: dynamicCode,
       amount: base,
+      fee_amount: fee,
       unique_code: code,
       amount_to_pay: pay,
-      expires_at: new Date(expiresAt).toISOString(),
+      expires_at: expiresAt,
     },
   });
 }

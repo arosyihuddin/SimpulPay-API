@@ -17,8 +17,8 @@ export interface Session {
   access_token?: string | null;
   refresh_token?: string | null;
   cookie?: string | null;
-  updated_at?: string | null;
-  expires_at?: string | null;
+  updated_at?: number | null;
+  expires_at?: number | null;
   [key: string]: unknown;
 }
 
@@ -53,8 +53,8 @@ export function buildSession(input: {
   outlet_name?: string | null;
   extra?: Session;
 }): Session {
-  const updatedAt = new Date();
-  const expiresAt = new Date(Date.now() + ACCESS_TTL_MS);
+  const updatedAt = Date.now();
+  const expiresAt = Date.now() + ACCESS_TTL_MS;
   return {
     ...(input.extra ?? {}),
     phone_number: input.phone_number ?? input.extra?.phone_number ?? null,
@@ -63,8 +63,8 @@ export function buildSession(input: {
     access_token: input.access_token,
     refresh_token: input.refresh_token,
     cookie: `access_token=${input.access_token}; refresh_token=${input.refresh_token}; auth_method=goid`,
-    updated_at: updatedAt.toISOString(),
-    expires_at: expiresAt.toISOString(),
+    updated_at: updatedAt,
+    expires_at: expiresAt,
   };
 }
 
@@ -94,8 +94,10 @@ export async function loadSession(DB: Db, merchantId: string): Promise<Session |
 
 export function isExpired(session: Session | null | undefined): boolean {
   if (!session || !session.access_token) return true;
-  if (!session.expires_at) return false;
-  return new Date(session.expires_at).getTime() < Date.now();
+  if (session.expires_at == null) return false;
+  const raw = session.expires_at as unknown;
+  const exp = typeof raw === "number" ? raw : Date.parse(String(raw));
+  return Number.isFinite(exp) ? exp < Date.now() : true;
 }
 
 export async function refreshSession(DB: Db, merchantId: string): Promise<Session | null> {

@@ -1,5 +1,6 @@
 import { verifyMerchantPending, hasPending } from "../services/pooling";
 import { getUserSettings } from "../db/repositories";
+import { poolingIntervalMs } from "../services/settings";
 import { createDb } from "../db/client";
 import type { DurableObject } from "@cloudflare/workers-types";
 import type { Db } from "../db/client";
@@ -130,13 +131,12 @@ export class AppHub implements DurableObject {
     return queryTransactions(DB, { status: "pending", limit: 500 });
   }
 
-  /** Ambil pooling_interval terkecil dari semua user yg masih punya pending. */
+  /** pooling_interval terkecil (detik, legacy ms ikut dikonversi) dari user yg punya pending. */
   private async getIntervalMs(DB: Db, userIds: Set<string>): Promise<number> {
     let min = DEFAULT_INTERVAL_MS;
     for (const userId of userIds) {
       const settings = await getUserSettings(DB, userId);
-      const v = parseInt(settings.pooling_interval ?? "", 10);
-      if (!Number.isNaN(v) && v > 0) min = Math.min(min, v);
+      min = Math.min(min, poolingIntervalMs(settings, DEFAULT_INTERVAL_MS));
     }
     return Math.max(MIN_INTERVAL_MS, min);
   }

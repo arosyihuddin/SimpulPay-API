@@ -5,13 +5,13 @@ export const health = (c: Context<AppEnv>) =>
   c.json({
     status: "OK",
     service: "SimpulPay",
-    timestamp: new Date(),
+    timestamp: Date.now(),
   });
 
 export const apiHealth = (c: Context<AppEnv>) =>
   c.json({
     success: true,
     message: "Layanan SimpulPay Berfungsi Normal",
-    timestamp: new Date(),
+    timestamp: Date.now(),
   });
 

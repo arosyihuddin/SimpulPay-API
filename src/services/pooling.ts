@@ -155,6 +155,7 @@ async function expireTx(
   t: { id: string; user_id?: string | null; type?: string | null },
   merchantId: string,
 ): Promise<void> {
+  logger.debug(`[POOLING] Qris ID ${t.id} Expired MerchantId ${merchantId} `);
   await updateTransactionStatus(DB, t.id, "expired");
   if (t.type === "subscription") {
     await updateInvoiceByTransaction(DB, t.id, "failed");

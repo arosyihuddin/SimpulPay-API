@@ -4,6 +4,7 @@ import {
   markTransactionsExpired,
   getTransaction,
   paidTransactionsInRange,
+  feeOf,
 } from "../../db/repositories";
 import type { TransactionStatus } from "../../db/repositories";
 import type { Context } from "hono";
@@ -49,6 +50,7 @@ export async function listTransactions(c: Context<AppEnv>) {
     merchant_name: t.merchant_name,
     amount: t.amount,
     base_amount: t.base_amount,
+    fee_amount: feeOf(t),
     unique_code: t.unique_code,
     status: t.status,
     created_at: t.created_at,
@@ -66,17 +68,24 @@ export async function listTransactions(c: Context<AppEnv>) {
   });
 }
 
-/** Ambil QRIS code (string QR) dari transaksi tertentu. */
+/** Ambil QRIS code (string QR) dari transaksi tertentu + info merchant & expiry utk modal. */
 export async function getTransactionCode(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = currentUserId(c);
   const id = c.req.param("id") ?? "";
   const tx = await getTransaction(DB, id);
   if (!tx || !tx.merchant_id) bad("Transaksi tidak ditemukan", 404);
-  await ownedMerchant(DB, userId, tx.merchant_id);
+  const m = await ownedMerchant(DB, userId, tx.merchant_id);
   return c.json({
     success: true,
-    data: { code: tx.code, status: tx.status },
+    data: {
+      code: tx.code,
+      status: tx.status,
+      created_at: tx.created_at,
+      expires_at: tx.expires_at,
+      merchant_id: tx.merchant_id,
+      merchant_name: m.name,
+    },
   });
 }
 
@@ -93,6 +102,7 @@ export async function recentTransactions(c: Context<AppEnv>) {
     merchant_id: t.merchant_id,
     merchant_name: t.merchant_name,
     amount: t.amount,
+    fee_amount: feeOf(t),
     status: t.status,
     created_at: t.created_at,
   }));

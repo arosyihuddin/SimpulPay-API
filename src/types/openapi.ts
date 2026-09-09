@@ -9,7 +9,7 @@ export const okRes = z.object({ success: z.literal(true) });
 
 export const v1HealthRes = okRes.extend({
   message: z.string(),
-  timestamp: z.unknown(),
+  timestamp: z.number(),
 });
 
 export const createQrisReq = z.object({ amount: z.number().positive() });
@@ -20,9 +20,10 @@ export const createQrisRes = okRes.extend({
     merchant_id: z.string(),
     qris_code: z.string(),
     amount: z.number(),
+    fee_amount: z.number(),
     unique_code: z.number(),
     amount_to_pay: z.number(),
-    expires_at: z.string(),
+    expires_at: z.number(),
   }),
 });
 
@@ -32,7 +33,7 @@ export const getQrisRes = okRes.extend({
     trx_id: z.string(),
     amount: z.number(),
     base_amount: z.number(),
-    unique_code: z.number(),
+    fee_amount: z.number(),
     status: z.string(),
     created_at: z.number(),
     expires_at: z.number(),

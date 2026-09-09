@@ -11,7 +11,7 @@ bindings = [
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "04defe125a1f4978bbe4c50ec1bd66e8"
+id = "932d6f4c012f4ceb819735e075429723"
 
 [exports.AppHub]
 type = "durable-object"

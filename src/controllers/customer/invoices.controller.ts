@@ -6,6 +6,7 @@ import {
   listInvoices,
   countInvoicesByStatus,
   getTransaction,
+  feeOf,
 } from "../../db/repositories";
 
 
@@ -37,8 +38,11 @@ export async function listMyInvoicesCtl(c: Context<AppEnv>) {
         subscription_id: i.subscription_id,
         transaction_id: i.transaction_id,
         amount: i.amount,
+        base_amount: tx?.base_amount ?? null,
+        fee_amount: tx ? feeOf(tx) : null,
         unique_code: tx?.unique_code ?? null,
         amount_to_pay: tx?.amount ?? null,
+        expires_at: tx?.expires_at ?? null,
         status: i.status,
         qris_code: i.status === "pending" && tx ? tx.code : null,
         period_start: i.period_start,

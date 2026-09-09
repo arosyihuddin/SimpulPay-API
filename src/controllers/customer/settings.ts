@@ -10,15 +10,22 @@ import { generateSecret } from "../../services/webhook";
 
 const DEFAULTS: Record<string, string> = {
   default_currency: "IDR",
-  qris_expiry_minutes: "15",
+  qris_expiry_minutes: "2",
   min_amount: "100",
   max_amount: "10000000",
   fee_percent: "0",
-  pooling_interval: "8000",
+  pooling_interval: "8",
   webhook_enabled: "false",
   webhook_url: "",
   webhook_secret: "",
 };
+
+// pooling_interval disimpan detik; nilai legacy ≥1000 dibaca sebagai ms.
+function normalizePooling(raw: unknown): string {
+  const v = parseFloat(String(raw ?? ""));
+  if (!Number.isFinite(v) || v <= 0) return String(raw ?? "");
+  return String(v >= 1000 ? Math.round(v / 1000) : v);
+}
 
 // Secret gak bisa di-set langsung — cuma bisa di-rotate via nilai "regenerate"
 const ALLOWED_UPDATES = new Set(
@@ -26,7 +33,9 @@ const ALLOWED_UPDATES = new Set(
 );
 
 function mergeSettings(dbRows: Record<string, string>): Record<string, string> {
-  return { ...DEFAULTS, ...dbRows };
+  const merged = { ...DEFAULTS, ...dbRows };
+  merged.pooling_interval = normalizePooling(merged.pooling_interval);
+  return merged;
 }
 
 export async function settings(c: Context<AppEnv>) {
@@ -44,6 +53,23 @@ export async function updateSettings(c: Context<AppEnv>) {
   const body = await c.req.json();
   if (typeof body !== "object" || !body) bad("Request body harus object");
 
+  const NUM_KEYS = ["min_amount", "max_amount", "fee_percent", "qris_expiry_minutes", "pooling_interval"];
+  for (const key of NUM_KEYS) {
+    if (body[key] === undefined) continue;
+    const v = Number(body[key]);
+    if (isNaN(v) || v < 0) bad(`${key} harus angka ≥ 0`);
+  }
+  if (body.fee_percent !== undefined && Number(body.fee_percent) > 100) bad("fee_percent maksimal 100");
+  if (body.qris_expiry_minutes !== undefined && Number(body.qris_expiry_minutes) > 1440) bad("qris_expiry_minutes maksimal 1440");
+  if (body.pooling_interval !== undefined && Number(body.pooling_interval) <= 0) bad("pooling_interval harus > 0");
+  if (
+    body.min_amount !== undefined &&
+    body.max_amount !== undefined &&
+    Number(body.max_amount) < Number(body.min_amount)
+  ) {
+    bad("max_amount harus ≥ min_amount");
+  }
+
   const current = await getUserSettings(DB, userId);
   const next = { ...current };
 
@@ -60,7 +86,8 @@ export async function updateSettings(c: Context<AppEnv>) {
 
   for (const [key, val] of Object.entries(body)) {
     if (ALLOWED_UPDATES.has(key)) {
-      next[key] = String(val);
+      // pooling_interval selalu simpan detik (legacy ms ikut dikonversi)
+      next[key] = key === "pooling_interval" ? normalizePooling(val) : String(val);
     }
   }
 

@@ -17,10 +17,10 @@ import {
 } from "../../db/repositories";
 import {
   generateDynamicQRIS,
-  qrisExpiryMs,
   uniqueAmount,
   getQrisStatic,
 } from "../../services/qris";
+import { merchantSettings, qrisExpiryMs } from "../../services/settings";
 import { MONTH_MS } from "../../services/pooling";
 import { broadcast } from "../../services/realtime";
 import { createNotifications } from "../../utils/notification.helper";
@@ -152,7 +152,8 @@ export async function createSubscriptionCtl(c: Context<AppEnv>) {
   const qrisId = Math.random().toString(36).substring(2, 10);
   const trxId =
     "SUB-" + Math.random().toString(36).substring(2, 10).toUpperCase();
-  const expiresAt = now + qrisExpiryMs();
+  const cfg = await merchantSettings(DB, adminMerchant.id);
+  const expiresAt = now + qrisExpiryMs(cfg);
 
   await insertTransaction(DB, {
     id: qrisId,
@@ -233,7 +234,7 @@ export async function createSubscriptionCtl(c: Context<AppEnv>) {
       amount: plan.price,
       unique_code: code,
       amount_to_pay: pay,
-      expires_at: new Date(expiresAt).toISOString(),
+      expires_at: expiresAt,
     },
   });
 }
