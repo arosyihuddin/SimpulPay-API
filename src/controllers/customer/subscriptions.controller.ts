@@ -21,6 +21,7 @@ import {
   uniqueAmount,
   getQrisStatic,
 } from "../../services/qris";
+import { MONTH_MS } from "../../services/pooling";
 import { broadcast } from "../../services/realtime";
 import { createNotifications } from "../../utils/notification.helper";
 
@@ -121,7 +122,6 @@ export async function createSubscriptionCtl(c: Context<AppEnv>) {
   const plan = await getPlan(DB, planId);
   if (!plan) bad("Plan tidak ditemukan", 404);
   const now = Date.now();
-  const monthMs = 30 * 24 * 60 * 60 * 1000;
 
   // Upgrade/downgrade berbayar: pending dulu, bayar via QRIS merchant admin.
   const pending = await getPendingSubscription(DB, userId);
@@ -176,7 +176,7 @@ export async function createSubscriptionCtl(c: Context<AppEnv>) {
     transactionId: qrisId,
     amount: pay,
     periodStart: now,
-    periodEnd: now + monthMs,
+    periodEnd: now + MONTH_MS,
   });
   broadcast(c.env, {
     type: "invoice_pending",

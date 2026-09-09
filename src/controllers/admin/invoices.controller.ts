@@ -3,6 +3,7 @@ import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
 import { bad, paramId } from "./helpers";
 import { scheduleSubExpiry } from "../../durable_objects/subTimer";
+import { MONTH_MS } from "../../services/pooling";
 import { createNotifications } from "../../utils/notification.helper";
 import { broadcast } from "../../services/realtime";
 import {
@@ -71,7 +72,7 @@ export async function markInvoicePaidCtl(c: Context<AppEnv>) {
     const endsAt =
       inv.period_end && inv.period_end > now
         ? inv.period_end
-        : now + 30 * 24 * 60 * 60 * 1000;
+        : now + MONTH_MS;
     await activateSubscriptionSwap(DB, sub.id, sub.user_id, endsAt);
     await scheduleSubExpiry(c.env, { subId: sub.id, userId: sub.user_id, endsAt, invoiceId: id });
     await insertLog(

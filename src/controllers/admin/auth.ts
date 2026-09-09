@@ -19,6 +19,8 @@ import {
   createSubscription,
   createInvoice,
 } from "../../db/repositories";
+import { scheduleSubExpiry } from "../../durable_objects/subTimer";
+import { MONTH_MS } from "../../services/pooling";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { Db, getDb } from "../../db/client";
@@ -111,21 +113,22 @@ export async function createUserCtl(c: Context<AppEnv>) {
     if (!plan) bad("Plan tidak ditemukan", 404);
     const subId = "sub_" + crypto.randomUUID().slice(0, 8);
     const now = Date.now();
-    const monthMs = 30 * 24 * 60 * 60 * 1000;
+    const endsAt = now + MONTH_MS;
     await createSubscription(DB, {
       id: subId,
       userId: id,
       planId: plan.id,
       startsAt: now,
-      endsAt: now + monthMs,
+      endsAt,
     });
+    await scheduleSubExpiry(c.env, { subId, userId: id, endsAt });
     await createInvoice(DB, {
       id: "inv_" + crypto.randomUUID().slice(0, 8),
       userId: id,
       subscriptionId: subId,
       amount: plan.price,
       periodStart: now,
-      periodEnd: now + monthMs,
+      periodEnd: endsAt,
     });
   }
 

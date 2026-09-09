@@ -18,7 +18,8 @@ import type { Env } from "../types";
 import { logger } from "../utils/logger";
 
 const MAX_BATCH = 500;
-const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+/** Satu periode langganan = 30 hari. Satu-satunya definisi — semua controller import dari sini. */
+export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Verify SEMUA transaksi pending satu merchant. 1 pass, panggil dari DO alarm. */
 export async function verifyMerchantPending(
