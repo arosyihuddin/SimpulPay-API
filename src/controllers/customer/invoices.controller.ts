@@ -15,6 +15,7 @@ import {
   getTransaction,
   insertLog,
 } from "../../db/repositories";
+import { scheduleSubExpiry } from "../../durable_objects/subTimer";
 import { verifyPayment } from "../../services/gojek";
 import { broadcast } from "../../services/realtime";
 import type { Env } from "../../types";
@@ -65,6 +66,7 @@ async function verifyPendingInvoice(
   const now = Date.now();
   const endsAt = now + 30 * 24 * 60 * 60 * 1000;
   await activateSubscriptionSwap(DB, sub.id, sub.user_id, endsAt);
+  await scheduleSubExpiry(env, { subId: sub.id, userId: sub.user_id, endsAt, invoiceId: inv.id });
   await updateInvoiceStatus(DB, inv.id, "paid", now);
   await updateTransactionStatus(DB, subTx.id, "paid");
   await insertLog(

@@ -1,16 +1,12 @@
 import { getValidHeaders } from "./sessionManager";
-import {
-  claimTx,
-  getClaim,
-  getMerchant,
-  insertLog,
-} from "../db/repositories";
+import { claimTx, getClaim, getMerchant, insertLog } from "../db/repositories";
 import { getMerchantId } from "./qris";
 import { checkDailyPaidLimit } from "./limits";
 import { sendWebhook } from "./webhook";
 import { createNotifications } from "../utils/notification.helper";
 import type { Db } from "../db/client";
 import type { Env } from "../types";
+import { logger } from "../utils/logger";
 
 const GOJEK_TRANSACTIONS_URL =
   "https://api.gojekapi.com/merchant-analytics/v2/merchants/transactions";
@@ -170,6 +166,9 @@ export async function verifyPayment(
   userAgent: string | null = null,
   qrisId: string | null = null,
 ) {
+  logger.debug(
+    `[POOLING] ${merchantId} is verifying payment of amount ${amount}`,
+  );
   const rawTransactions = await fetchTransactionsWithRetry(DB, merchantId, {
     startTime: startTime ? (startTime as number) : undefined,
     merchantIdOverride,

@@ -4,6 +4,7 @@ import { createDb } from "../db/client";
 import type { DurableObject } from "@cloudflare/workers-types";
 import type { Db } from "../db/client";
 import type { Env } from "../types";
+import { logger } from "../utils/logger";
 
 const MIN_INTERVAL_MS = 1000;
 const DEFAULT_INTERVAL_MS = 8000;
@@ -58,8 +59,8 @@ export class AppHub implements DurableObject {
     const scope = url.searchParams.get("scope") ?? undefined;
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    console.log(`New Client Connected: ${userId}`);
-    console.log(`Cient has connected : ${client.readyState}`);
+    logger.debug(`New Client Connected: ${userId}`);
+    logger.debug(`Client has connected : ${client.readyState}`);
 
     // Hibernation API: tag routing survive eviction.
     // Scope = dimensi tambahan (opsional), bukan pengganti userId.
@@ -131,5 +132,4 @@ export class AppHub implements DurableObject {
       }
     }
   }
-
 }

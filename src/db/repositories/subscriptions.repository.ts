@@ -1,4 +1,4 @@
-import { eq, and, or, desc, lt, gte, lte, ne, isNull, sql, ilike } from "drizzle-orm";
+import { eq, and, or, desc, gte, lte, ne, isNull, sql, ilike } from "drizzle-orm";
 import { subscriptions, plans, users } from "../schema";
 import type { Db } from "../client";
 import type { PlanRow } from "./plans.repository";
@@ -81,21 +81,6 @@ export async function getPendingSubscription(
   return rows[0] ?? null;
 }
 
-/** Sub pending yang belum lunas lewat batas waktu (created_at sebelum `olderThanMs`). */
-export async function listStalePendingSubscriptions(
-  db: Db,
-  olderThanMs: number,
-): Promise<SubscriptionRow[]> {
-  return db
-    .select()
-    .from(subscriptions)
-    .where(
-      and(
-        eq(subscriptions.status, "pending"),
-        lt(subscriptions.created_at, olderThanMs),
-      ),
-    );
-}
 
 /** Sub aktif + plan-nya dalam 1 query (join). Ganti getActiveSubscription+getPlan kalau dua-duanya dipakai. */
 export async function getActivePlanForUser(
@@ -202,19 +187,6 @@ export async function countSubscriptionsByStatus(
   return r[0] ?? { total: 0, active: 0, cancelled: 0, expired: 0 };
 }
 
-/** Sub status active tapi ends_at sudah lewat — kandidat expired. */
-export async function listExpiredSubscriptions(
-  db: Db,
-  now = Date.now(),
-): Promise<SubscriptionRow[]> {
-  return db
-    .select()
-    .from(subscriptions)
-    .where(
-      and(eq(subscriptions.status, "active"), lt(subscriptions.ends_at, now)),
-    )
-    .orderBy(desc(subscriptions.created_at));
-}
 
 export async function updateSubscription(
   db: Db,

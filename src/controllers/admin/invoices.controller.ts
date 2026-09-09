@@ -2,8 +2,9 @@ import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
 import { bad, paramId } from "./helpers";
-import { broadcast } from "../../services/realtime";
+import { scheduleSubExpiry } from "../../durable_objects/subTimer";
 import { createNotifications } from "../../utils/notification.helper";
+import { broadcast } from "../../services/realtime";
 import {
   getInvoice,
   listInvoices,
@@ -72,6 +73,7 @@ export async function markInvoicePaidCtl(c: Context<AppEnv>) {
         ? inv.period_end
         : now + 30 * 24 * 60 * 60 * 1000;
     await activateSubscriptionSwap(DB, sub.id, sub.user_id, endsAt);
+    await scheduleSubExpiry(c.env, { subId: sub.id, userId: sub.user_id, endsAt, invoiceId: id });
     await insertLog(
       DB,
       "SUCCESS",
