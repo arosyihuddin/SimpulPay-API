@@ -1,26 +1,18 @@
 import type { Context } from "hono";
 import type { AppEnv } from "../types";
 import { getDb } from "../db/client";
-import { getValidHeaders } from "../services/sessionManager";
 import {
   generateDynamicQRIS,
   qrisExpiryMs,
   uniqueAmount,
   getQrisStatic,
-  getMerchantId,
 } from "../services/qris";
-import {
-  fetchGojekTransactions,
-  fetchTransactionsWithRetry,
-  formatTransaction,
-  verifyPayment,
-} from "../services/gojek";
+import { verifyPayment } from "../services/gojek";
 import {
   insertTransaction,
   getTransaction,
   markTransactionsExpired,
   insertLog,
-  recentLogs,
   getMerchant,
   listMerchantsByUser,
 } from "../db/repositories";
@@ -31,17 +23,6 @@ export async function health(c: Context<AppEnv>) {
   return c.json(
     ok({ message: "Layanan SimpulPay Berfungsi Normal", timestamp: new Date() }),
   );
-}
-
-export async function merchantStatus(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const id = c.req.param("id");
-  if (!id) fail(400, "merchant_id wajib di path");
-  const merchant = await getMerchant(DB, id);
-  if (!merchant) fail(404, "Merchant tidak ditemukan");
-  if (merchant.user_id !== c.get("user")?.userId)
-    fail(403, "Akses ditolak: merchant bukan milik akun ini");
-  return c.json(ok({ data: { active: merchant.status === "active" } }));
 }
 
 export async function createQris(c: Context<AppEnv>) {
@@ -165,112 +146,4 @@ export async function checkPayment(c: Context<AppEnv>) {
     await insertLog(DB, "ERROR", `Gagal periksa pembayaran via API v1: ${errorDetail}`);
     fail(500, "Gagal mengambil data transaksi dari API GoPay", { error: errorDetail });
   }
-}
-
-export async function listTransactions(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const merchantId = c.get("merchantId");
-  if (!merchantId) fail(400, "API key belum terikat ke merchant. Buat/bind API key ke merchant dulu.");
-  const query = c.req.query();
-  try {
-    const raw = await fetchTransactionsWithRetry(DB, merchantId, {
-      userAgent: c.req.header("user-agent"),
-      startTime: query.startTime
-        ? parseInt(query.startTime as string, 10) * 1000
-        : new Date(Date.now() - 3 * 24 * 3600 * 1000).getTime(),
-      endTime: query.endTime
-        ? parseInt(query.endTime as string, 10) * 1000
-        : Date.now(),
-      pageSize: parseInt((query.pageSize as string) || "20", 10),
-    });
-    const formatted = raw.map(formatTransaction);
-    return c.json(
-      ok({
-        total_amount: String(
-          formatted.reduce((a: number, t: any) => a + t.amount, 0),
-        ),
-        data: { transactions: formatted },
-      }),
-    );
-  } catch (err) {
-    fail(500, (err as Error).message);
-  }
-}
-
-export async function monthTransactions(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const merchantId = c.get("merchantId");
-  if (!merchantId) fail(400, "API key belum terikat ke merchant. Buat/bind API key ke merchant dulu.");
-  const now = new Date();
-  const startOfMonthUnix = Math.floor(
-    new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000,
-  );
-  try {
-    const raw = await fetchTransactionsWithRetry(DB, merchantId, {
-      userAgent: c.req.header("user-agent"),
-      startTime: startOfMonthUnix * 1000,
-      endTime: now.getTime(),
-      pageSize: 100,
-    });
-    const formatted = raw.map(formatTransaction);
-    return c.json(
-      ok({
-        total_amount: String(
-          formatted.reduce((a: number, t: any) => a + t.amount, 0),
-        ),
-        data: { transactions: formatted },
-      }),
-    );
-  } catch (err) {
-    fail(500, (err as Error).message);
-  }
-}
-
-export async function tokenStatus(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  const merchantId = c.get("merchantId");
-  if (!merchantId) fail(400, "API key belum terikat ke merchant. Buat/bind API key ke merchant dulu.");
-  const activeHeaders = await getValidHeaders(DB, merchantId, c.req.header("user-agent"));
-  if (!activeHeaders)
-    return c.json(
-      ok({
-        data: {
-          token_status: "invalid",
-          message: "Sesi belum dikonfigurasi. Login OTP di dashboard.",
-        },
-      }),
-    );
-  try {
-    const gopayMerchantId = await getMerchantId(DB, merchantId);
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 3600 * 1000).toISOString();
-    await fetchGojekTransactions(activeHeaders, {
-      from: "0",
-      size: "1",
-      statuses: "SETTLEMENT,CAPTURE",
-      payment_types: "QRIS,GOPAY",
-      start_time: oneHourAgo,
-      end_time: now.toISOString(),
-      merchant_ids: gopayMerchantId,
-    });
-    return c.json(
-      ok({
-        data: {
-          token_status: "valid",
-          message: "Token dan Sesi GoPay Merchant Aktif",
-        },
-      }),
-    );
-  } catch (err) {
-    return c.json(
-      ok({
-        data: { token_status: "invalid", message: (err as Error).message },
-      }),
-    );
-  }
-}
-
-export async function logs(c: Context<AppEnv>) {
-  const DB = getDb(c);
-  return c.json(ok({ logs: await recentLogs(DB) }));
 }

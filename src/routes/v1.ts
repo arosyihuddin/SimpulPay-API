@@ -4,62 +4,23 @@ import { apiKeyGuard } from "../middleware/guards";
 import type { AppEnv } from "../types";
 import {
   health,
-  merchantStatus,
   createQris,
   getQris,
   checkPayment,
-  listTransactions,
-  monthTransactions,
-  tokenStatus,
-  logs,
 } from "../controllers/v1.controller";
 import {
   v1HealthRes,
-  merchantStatusRes,
   createQrisReq,
   createQrisRes,
   getQrisRes,
   paymentCheckReq,
   paymentCheckRes,
-  transactionsRes,
-  tokenStatusRes,
-  logsRes,
   errorRes,
 } from "../types/openapi";
 
 const v1Routes = new OpenAPIHono<AppEnv>();
 v1Routes.use("*", apiKeyGuard);
 const reg: any = (route: any, handler: any) => v1Routes.openapi(route, handler);
-
-// Path-id: merchant di path, bukan dari API key binding
-reg(
-  createRoute({
-    method: "get",
-    path: "/merchants/{id}",
-    tags: ["Merchant"],
-    summary: "Status merchant (aktif/tidak)",
-    request: { params: z.object({ id: z.string() }) },
-    responses: {
-      200: {
-        description: "Status merchant",
-        content: { "application/json": { schema: merchantStatusRes } },
-      },
-      400: {
-        description: "merchant_id wajib di path",
-        content: { "application/json": { schema: errorRes } },
-      },
-      403: {
-        description: "Merchant bukan milik akun ini",
-        content: { "application/json": { schema: errorRes } },
-      },
-      404: {
-        description: "Merchant tidak ditemukan",
-        content: { "application/json": { schema: errorRes } },
-      },
-    },
-  }),
-  merchantStatus,
-);
 
 reg(
   createRoute({
@@ -148,70 +109,6 @@ reg(
     },
   }),
   checkPayment,
-);
-
-reg(
-  createRoute({
-    method: "get",
-    path: "/transactions",
-    tags: ["Transactions"],
-    summary: "List transaksi GoPay",
-    responses: {
-      200: {
-        description: "List transaksi",
-        content: { "application/json": { schema: transactionsRes } },
-      },
-    },
-  }),
-  listTransactions,
-);
-
-reg(
-  createRoute({
-    method: "get",
-    path: "/transactions/month",
-    tags: ["Transactions"],
-    summary: "Transaksi bulan ini (rekap)",
-    responses: {
-      200: {
-        description: "Total & list",
-        content: { "application/json": { schema: transactionsRes } },
-      },
-    },
-  }),
-  monthTransactions,
-);
-
-reg(
-  createRoute({
-    method: "get",
-    path: "/token-status",
-    tags: ["Session"],
-    summary: "Status sesi token GoPay",
-    responses: {
-      200: {
-        description: "valid / invalid",
-        content: { "application/json": { schema: tokenStatusRes } },
-      },
-    },
-  }),
-  tokenStatus,
-);
-
-reg(
-  createRoute({
-    method: "get",
-    path: "/logs",
-    tags: ["Logs"],
-    summary: "Log terbaru",
-    responses: {
-      200: {
-        description: "List log",
-        content: { "application/json": { schema: logsRes } },
-      },
-    },
-  }),
-  logs,
 );
 
 export { v1Routes };

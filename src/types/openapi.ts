@@ -50,32 +50,3 @@ export const paymentCheckRes = okRes.extend({
   transaction: z.record(z.string(), z.unknown()).optional(),
 });
 
-export const transactionSchema = z.object({
-  amount: z.number(),
-  status: z.string(),
-  time: z.unknown().optional(),
-  issuer: z.string(),
-  order_id: z.string().optional(),
-  transaction_id: z.string().optional(),
-});
-export const transactionsRes = okRes.extend({
-  total_amount: z.string(),
-  data: z.object({ transactions: z.array(transactionSchema) }),
-});
-
-export const tokenStatusRes = okRes.extend({
-  data: z.object({
-    token_status: z.enum(["valid", "invalid"]),
-    message: z.string(),
-  }),
-});
-
-export const logsRes = okRes.extend({
-  logs: z.array(z.record(z.string(), z.unknown())),
-});
-
-export const merchantStatusRes = okRes.extend({
-  data: z.object({
-    active: z.boolean(),
-  }),
-});
