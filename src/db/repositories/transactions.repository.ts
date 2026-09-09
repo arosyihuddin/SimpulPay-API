@@ -49,6 +49,18 @@ export async function getTransaction(
   return rows[0] ?? null;
 }
 
+export async function getTransactionByTrx(
+  db: Db,
+  trxId: string,
+): Promise<TransactionRow | null> {
+  const rows = await db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.trx_id, trxId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function updateTransactionStatus(
   db: Db,
   id: string,

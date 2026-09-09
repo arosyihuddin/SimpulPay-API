@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import type { AppEnv } from "../types";
-import { getDb } from "../db/client";
+import { getDb, type Db } from "../db/client";
 import {
   generateDynamicQRIS,
   qrisExpiryMs,
@@ -11,6 +11,7 @@ import { verifyPayment } from "../services/gojek";
 import {
   insertTransaction,
   getTransaction,
+  getTransactionByTrx,
   markTransactionsExpired,
   insertLog,
   getMerchant,
@@ -18,6 +19,21 @@ import {
 } from "../db/repositories";
 import { fail, ok } from "../middleware/errorHandler";
 import { checkDailyPaidLimit } from "../services/limits";
+
+async function resolveBoundMerchant(DB: Db, userId: string, boundId: string): Promise<string> {
+  const m = await getMerchant(DB, boundId);
+  if (!m) fail(404, "Merchant tidak ditemukan");
+  if (m.user_id !== userId) fail(403, "Akses ditolak: merchant bukan milik akun ini");
+  if (m.status !== "active") fail(403, "Merchant tidak aktif");
+  return m.id;
+}
+
+async function pickRandomActiveMerchant(DB: Db, userId: string): Promise<string> {
+  const merchants = await listMerchantsByUser(DB, userId);
+  const active = merchants.filter((m) => m.status === "active");
+  if (active.length === 0) fail(400, "Belum ada merchant aktif. Buat merchant dulu atau bind API key ke merchant.");
+  return active[Math.floor(Math.random() * active.length)].id;
+}
 
 export async function health(c: Context<AppEnv>) {
   return c.json(
@@ -29,14 +45,11 @@ export async function createQris(c: Context<AppEnv>) {
   const DB = getDb(c);
   const userId = c.get("user")?.userId;
   if (!userId) fail(500, "userId tidak ditemukan di context");
-  let merchantId = c.get("merchantId");
-  // Key gak terikat merchant → pilih random merchant aktif milik user.
-  if (!merchantId) {
-    const merchants = await listMerchantsByUser(DB, userId);
-    const active = merchants.filter((m) => m.status === "active");
-    if (active.length === 0) fail(400, "Belum ada merchant aktif. Buat merchant dulu atau bind API key ke merchant.");
-    merchantId = active[Math.floor(Math.random() * active.length)].id;
-  }
+  const boundId = c.get("merchantId");
+  // Key terikat → pakai itu (validasi milik + aktif). Key null → random merchant aktif.
+  const merchantId = boundId
+    ? await resolveBoundMerchant(DB, userId, boundId)
+    : await pickRandomActiveMerchant(DB, userId);
   const body = await c.req.json();
   const amount = body?.amount;
   if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
@@ -71,6 +84,7 @@ export async function createQris(c: Context<AppEnv>) {
       data: {
         qris_id: qrisId,
         trx_id: trxId,
+        merchant_id: merchantId,
         qris_code: dynamicCode,
         amount: base,
         unique_code: code,
@@ -112,14 +126,26 @@ export async function getQris(c: Context<AppEnv>) {
 
 export async function checkPayment(c: Context<AppEnv>) {
   const DB = getDb(c);
-  const merchantId = c.get("merchantId");
-  if (!merchantId) fail(400, "API key belum terikat ke merchant. Buat/bind API key ke merchant dulu.");
+  const userId = c.get("user")?.userId;
+  if (!userId) fail(500, "userId tidak ditemukan di context");
   const body = await c.req.json();
   const query = c.req.query();
   const amount = body?.amount || query.amount;
   const startTime = body?.startTime || query.startTime || query.start_time;
   const scopeId = body?.trx_id || query.trx_id || null;
   if (!amount || isNaN(Number(amount))) fail(400, "Nominal pembayaran tidak valid");
+  const boundId = c.get("merchantId");
+  // Key terikat → validasi milik + aktif. Key null → merchant dari trx_id (deterministik).
+  let merchantId: string;
+  if (boundId) {
+    merchantId = await resolveBoundMerchant(DB, userId, boundId);
+  } else if (scopeId) {
+    const t = await getTransactionByTrx(DB, String(scopeId));
+    if (!t || !t.merchant_id) fail(404, "trx_id tidak ditemukan");
+    merchantId = await resolveBoundMerchant(DB, userId, t.merchant_id);
+  } else {
+    fail(400, "API key belum terikat ke merchant: sertakan trx_id atau bind API key ke merchant dulu.");
+  }
   try {
     const matchedTransaction = await verifyPayment(
       c.env,
