@@ -30,6 +30,7 @@ import {
   deleteMerchantCtl,
   listNotificationsCtl,
   markNotificationReadCtl,
+  markAllNotificationsReadCtl,
   listAnnouncementsCtl,
   markAnnouncementReadCtl,
 } from "../controllers/customer";
@@ -92,6 +93,7 @@ customerRoutes.delete("/api-keys/:id", ...customerAuth, deleteApiKeyCtl);
 
 // Notifications
 customerRoutes.get("/notifications", ...customerAuth, listNotificationsCtl);
+customerRoutes.post("/notifications/read-all", ...customerAuth, markAllNotificationsReadCtl);
 customerRoutes.post(
   "/notifications/:id/read",
   ...customerAuth,

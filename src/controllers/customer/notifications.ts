@@ -1,4 +1,4 @@
-import { listNotificationsByUser, markNotificationRead, countUnreadNotifications } from "../../db/repositories";
+import { listNotificationsByUser, markNotificationRead, markAllNotificationsRead, countUnreadNotifications } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
@@ -21,6 +21,11 @@ export async function markNotificationReadCtl(c: Context<AppEnv>) {
   const DB = getDb(c);
   const id = parseInt(c.req.param("id") ?? "", 10);
   if (isNaN(id)) bad("ID notifikasi tidak valid");
-  await markNotificationRead(DB, id);
+  await markNotificationRead(DB, id, currentUserId(c));
+  return c.json({ success: true });
+}
+
+export async function markAllNotificationsReadCtl(c: Context<AppEnv>) {
+  await markAllNotificationsRead(getDb(c), currentUserId(c));
   return c.json({ success: true });
 }

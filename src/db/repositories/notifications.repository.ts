@@ -37,8 +37,12 @@ export async function listNotificationsByUser(
     .offset(opts.offset ?? 0);
 }
 
-export async function markNotificationRead(db: Db, id: number) {
-  await db.update(notifications).set({ read: true }).where(eq(notifications.id, id));
+export async function markNotificationRead(db: Db, id: number, userId: string) {
+  await db.update(notifications).set({ read: true }).where(and(eq(notifications.id, id), eq(notifications.user_id, userId)));
+}
+
+export async function markAllNotificationsRead(db: Db, userId: string) {
+  await db.update(notifications).set({ read: true }).where(and(eq(notifications.user_id, userId), eq(notifications.read, false)));
 }
 
 export async function countUnreadNotifications(db: Db, userId: string): Promise<number> {
