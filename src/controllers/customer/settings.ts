@@ -60,7 +60,7 @@ export async function updateSettings(c: Context<AppEnv>) {
     if (isNaN(v) || v < 0) bad(`${key} harus angka ≥ 0`);
   }
   if (body.fee_percent !== undefined && Number(body.fee_percent) > 100) bad("fee_percent maksimal 100");
-  if (body.qris_expiry_minutes !== undefined && Number(body.qris_expiry_minutes) > 1440) bad("qris_expiry_minutes maksimal 1440");
+  if (body.qris_expiry_minutes !== undefined && (Number(body.qris_expiry_minutes) < 1 || Number(body.qris_expiry_minutes) > 1440)) bad("qris_expiry_minutes minimal 1, maksimal 1440");
   if (body.pooling_interval !== undefined && Number(body.pooling_interval) <= 0) bad("pooling_interval harus > 0");
   if (
     body.min_amount !== undefined &&
