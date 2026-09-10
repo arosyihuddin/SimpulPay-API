@@ -20,7 +20,7 @@ export async function createApiKeyCtl(c: Context<AppEnv>) {
     await ownedActiveMerchant(DB, userId, merchantId);
   }
   const key =
-    "gm_" + bufToHex(crypto.getRandomValues(new Uint8Array(32)).buffer);
+    "sp-" + bufToHex(crypto.getRandomValues(new Uint8Array(32)).buffer);
   const id = "k_" + crypto.randomUUID().slice(0, 8);
   await createApiKey(DB, { id, userId, key, label, merchantId });
   await insertLog(
