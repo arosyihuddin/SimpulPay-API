@@ -6,7 +6,7 @@ import {
   getUserSettings,
   setUserSettings,
 } from "../../db/repositories";
-import { generateSecret } from "../../services/webhook";
+import { generateSecret, sendTestWebhook } from "../../services/webhook";
 
 const DEFAULTS: Record<string, string> = {
   default_currency: "IDR",
@@ -96,6 +96,12 @@ export async function updateSettings(c: Context<AppEnv>) {
   const merged = mergeSettings(next);
   delete merged.webhook_secret;
   return c.json({ success: true, data: { settings: merged } });
+}
+
+/** POST /settings/webhook/test — kirim payload dummy, tanpa queue. */
+export async function testWebhookCtl(c: Context<AppEnv>) {
+  const r = await sendTestWebhook(getDb(c), currentUserId(c));
+  return c.json({ success: r.ok, data: r });
 }
 
 /** GET /settings/webhook — satu-satunya tempat liat webhook_secret. */

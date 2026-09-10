@@ -16,6 +16,7 @@ import {
   settings,
   updateSettings,
   webhookInfo,
+  testWebhookCtl,
   createApiKeyCtl,
   listApiKeysCtl,
   deleteApiKeyCtl,
@@ -104,6 +105,7 @@ customerRoutes.post(
 customerRoutes.get("/settings", ...customerAuth, settings);
 customerRoutes.patch("/settings", ...customerAuth, updateSettings);
 customerRoutes.get("/settings/webhook", ...customerAuth, webhookInfo);
+customerRoutes.post("/settings/webhook/test", ...customerAuth, testWebhookCtl);
 
 // Billing: customer baca plan, self-service subscribe
 customerRoutes.get("/plans", ...customerAuth, listPlansCtl);

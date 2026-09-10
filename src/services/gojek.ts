@@ -1,5 +1,5 @@
 import { getValidHeaders } from "./sessionManager";
-import { claimTx, getClaim, getMerchant, insertLog } from "../db/repositories";
+import { claimTx, getClaim, getMerchant, getTransaction, feeOf, insertLog } from "../db/repositories";
 import { getMerchantId } from "./qris";
 import { checkDailyPaidLimit } from "./limits";
 import { sendWebhook } from "./webhook";
@@ -164,7 +164,7 @@ export async function verifyPayment(
   startTime: unknown,
   merchantIdOverride: string | null = null,
   userAgent: string | null = null,
-  qrisId: string | null = null,
+  transactionId: string | null = null,
 ) {
   logger.debug(
     `[POOLING] ${merchantId} is verifying payment of amount ${amount}`,
@@ -202,11 +202,11 @@ export async function verifyPayment(
           );
           continue;
         }
-        if (await claimTx(DB, txId, qrisId, merchantId)) {
+        if (await claimTx(DB, txId, transactionId, merchantId)) {
           await insertLog(
             DB,
             "INFO",
-            `TRX ${txId} diklaim oleh QRIS ${qrisId || "manual-check"}`,
+            `TRX ${txId} diklaim transaksi ${transactionId || "manual-check"}`,
           );
           const merchant = await getMerchant(DB, merchantId);
           if (merchant) {
@@ -221,15 +221,19 @@ export async function verifyPayment(
                 message,
               },
             });
-            await sendWebhook(DB, merchant.user_id, "transaction.paid", {
-              transaction_id: txId,
-              qris_id: qrisId,
-              trx_id: tx.order_id ?? null,
-              amount: txAmount,
-              merchant_id: merchantId,
-              merchant_name: merchant.name,
-              paid_at: Date.now(),
-            });
+            if (transactionId) {
+              const row = await getTransaction(DB, transactionId);
+              await sendWebhook(DB, merchant.user_id, "transaction.paid", {
+                transaction_id: transactionId,
+                amount: row?.amount ?? txAmount,
+                base_amount: row?.base_amount ?? null,
+                unique_code: row?.unique_code ?? null,
+                fee_amount: row ? feeOf(row) : null,
+                merchant_id: merchantId,
+                merchant_name: merchant.name,
+                paid_at: Date.now(),
+              });
+            }
           }
           return {
             transaction_id: txId,
@@ -241,7 +245,7 @@ export async function verifyPayment(
             transaction_time: tx.transaction_time || tx.settlement_time,
           };
         }
-      } else if (qrisId && existingClaim.transaction_id === qrisId) {
+      } else if (transactionId && existingClaim.transaction_id === transactionId) {
         return {
           transaction_id: txId,
           order_id: tx.order_id,
@@ -255,7 +259,7 @@ export async function verifyPayment(
         await insertLog(
           DB,
           "INFO",
-          `TRX ${txId} sudah diklaim oleh QRIS ${existingClaim.transaction_id || "lain"}, skip untuk QRIS ${qrisId}`,
+          `TRX ${txId} sudah diklaim transaksi ${existingClaim.transaction_id || "lain"}, skip untuk transaksi ${transactionId}`,
         );
         continue;
       }

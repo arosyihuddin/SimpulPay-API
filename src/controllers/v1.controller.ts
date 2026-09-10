@@ -149,12 +149,19 @@ export async function checkPayment(c: Context<AppEnv>) {
   const boundId = c.get("merchantId");
   // Key terikat → validasi milik + aktif. Key null → merchant dari trx_id (deterministik).
   let merchantId: string;
+  let scopeTxId: string | null = null;
   if (boundId) {
     merchantId = await resolveBoundMerchant(DB, userId, boundId);
+    if (scopeId) {
+      const t = await getTransactionByTrx(DB, String(scopeId));
+      if (!t || t.merchant_id !== merchantId) fail(404, "trx_id tidak ditemukan");
+      scopeTxId = t.id;
+    }
   } else if (scopeId) {
     const t = await getTransactionByTrx(DB, String(scopeId));
     if (!t || !t.merchant_id) fail(404, "trx_id tidak ditemukan");
     merchantId = await resolveBoundMerchant(DB, userId, t.merchant_id);
+    scopeTxId = t.id;
   } else {
     fail(400, "API key belum terikat ke merchant: sertakan trx_id atau bind API key ke merchant dulu.");
   }
@@ -167,7 +174,7 @@ export async function checkPayment(c: Context<AppEnv>) {
       startTime,
       null,
       c.req.header("user-agent"),
-      scopeId,
+      scopeTxId,
     );
     if (matchedTransaction) {
       await insertLog(DB, "SUCCESS", `Pembayaran terverifikasi lunas via API v1 | Merchant ${merchantId} | Rp ${parseInt(String(amount), 10)}`, matchedTransaction);

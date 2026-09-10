@@ -5,13 +5,13 @@ import type { Db } from "../client";
 export async function claimTx(
   db: Db,
   txId: string,
-  qrisId: string | null,
+  transactionId: string | null,
   merchantId?: string,
   claimedAt = Date.now(),
 ): Promise<boolean> {
   const rows = await db
     .insert(claims)
-    .values({ tx_id: txId, transaction_id: qrisId, merchant_id: merchantId ?? null, claimed_at: claimedAt })
+    .values({ tx_id: txId, transaction_id: transactionId, merchant_id: merchantId ?? null, claimed_at: claimedAt })
     .onConflictDoNothing({ target: claims.tx_id })
     .returning({ tx_id: claims.tx_id });
   return rows.length > 0;

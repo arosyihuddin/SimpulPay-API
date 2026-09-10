@@ -1,5 +1,6 @@
 import {
   queryTransactions,
+  feeOf,
   updateTransactionStatus,
   updateInvoiceByTransaction,
   getMerchant,
@@ -11,6 +12,7 @@ import {
 } from "../db/repositories";
 import { scheduleSubExpiry } from "../durable_objects/subTimer";
 import { verifyPayment } from "./gojek";
+import { sendWebhook } from "./webhook";
 import { broadcast } from "./realtime";
 import { createNotifications } from "../utils/notification.helper";
 import type { Db } from "../db/client";
@@ -152,11 +154,30 @@ export async function verifyMerchantPending(
 async function expireTx(
   DB: Db,
   env: Env,
-  t: { id: string; user_id?: string | null; type?: string | null },
+  t: {
+    id: string;
+    user_id?: string | null;
+    type?: string | null;
+    amount?: number | null;
+    base_amount?: number | null;
+    unique_code?: number | null;
+  },
   merchantId: string,
 ): Promise<void> {
   logger.debug(`[POOLING] Qris ID ${t.id} Expired MerchantId ${merchantId} `);
   await updateTransactionStatus(DB, t.id, "expired");
+  if (t.user_id) {
+    const amt = t.amount ?? null;
+    await sendWebhook(DB, t.user_id, "transaction.expired", {
+      transaction_id: t.id,
+      amount: amt,
+      base_amount: t.base_amount ?? null,
+      unique_code: t.unique_code ?? null,
+      fee_amount: amt != null ? feeOf({ amount: amt, base_amount: t.base_amount ?? null, unique_code: t.unique_code ?? null }) : null,
+      merchant_id: merchantId,
+      expired_at: Date.now(),
+    });
+  }
   if (t.type === "subscription") {
     await updateInvoiceByTransaction(DB, t.id, "failed");
     const inv = await getInvoiceByTransaction(DB, t.id);

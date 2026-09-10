@@ -39,6 +39,44 @@ function webhookCfg(settings: Record<string, string>) {
   };
 }
 
+async function deliverDetailed(
+  DB: Db,
+  userId: string,
+  url: string,
+  secret: string,
+  payload: Record<string, unknown>,
+  queueId?: string,
+): Promise<{ ok: boolean; status: number | null; error: string | null }> {
+  const body = JSON.stringify(payload);
+  const signature = await signPayload(secret, body);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-SimpulPay-Signature": signature,
+        "X-SimpulPay-Event": String(payload.event ?? ""),
+      },
+      body,
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      throw new Error(`webhook HTTP ${res.status}`);
+    }
+    return { ok: true, status: res.status, error: null };
+  } catch (err) {
+    const msg = (err as Error).message;
+    await insertLog(
+      DB,
+      "WARNING",
+      `Webhook gagal${queueId ? " (queued)" : ""} ${url}: ${msg}`,
+      null,
+      userId,
+    );
+    return { ok: false, status: null, error: msg };
+  }
+}
+
 async function deliver(
   DB: Db,
   userId: string,
@@ -48,35 +86,33 @@ async function deliver(
   const settings = await getUserSettings(DB, userId);
   const cfg = webhookCfg(settings);
   if (!cfg.enabled || !cfg.url) return true; // disabled → anggap sukses (drop)
+  return (await deliverDetailed(DB, userId, cfg.url, cfg.secret, payload, queueId)).ok;
+}
 
-  const body = JSON.stringify(payload);
-  const signature = await signPayload(cfg.secret, body);
-
-  try {
-    const res = await fetch(cfg.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Gomerch-Signature": signature,
-        "X-Gomerch-Event": String(payload.event ?? ""),
-      },
-      body,
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) {
-      throw new Error(`webhook HTTP ${res.status}`);
-    }
-    return true;
-  } catch (err) {
-    await insertLog(
-      DB,
-      "WARNING",
-      `Webhook gagal${queueId ? " (queued)" : ""} ${cfg.url}: ${(err as Error).message}`,
-      null,
-      userId,
-    );
-    return false;
-  }
+/** Tes manual dari dashboard — payload dummy transaction.paid, langsung tanpa queue. URL wajib, toggle boleh mati. */
+export async function sendTestWebhook(
+  DB: Db,
+  userId: string,
+): Promise<{ ok: boolean; status: number | null; error: string | null; event: string }> {
+  const settings = await getUserSettings(DB, userId);
+  const cfg = webhookCfg(settings);
+  if (!cfg.url) return { ok: false, status: null, error: "Isi webhook URL dulu", event: "transaction.paid" };
+  const r = await deliverDetailed(DB, userId, cfg.url, cfg.secret, {
+    event: "transaction.paid",
+    timestamp: Date.now(),
+    test: true,
+    data: {
+      transaction_id: "TEST-001",
+      amount: 50123,
+      base_amount: 50000,
+      unique_code: 123,
+      fee_amount: 0,
+      merchant_id: "test",
+      merchant_name: "Tes Webhook",
+      paid_at: Date.now(),
+    },
+  });
+  return { ...r, event: "transaction.paid" };
 }
 
 /** Kirim webhook event ke user. Kalau gagal → masuk queue buat retry. */
