@@ -102,7 +102,7 @@ export async function sendTestWebhook(
     timestamp: Date.now(),
     test: true,
     data: {
-      transaction_id: "TEST-001",
+      trx_id: "TRX-TEST01",
       amount: 50123,
       base_amount: 50000,
       unique_code: 123,

@@ -129,7 +129,7 @@ export async function verifyMerchantPending(
           broadcast(env, {
             type: "payment_received",
             userId: t.user_id,
-            data: { id: t.id, status: "paid", amount: t.amount },
+            data: { id: t.id, trx_id: t.trx_id, status: "paid", amount: t.amount },
           });
           broadcast(env, {
             type: "transaction_updated",
@@ -156,6 +156,7 @@ async function expireTx(
   env: Env,
   t: {
     id: string;
+    trx_id: string;
     user_id?: string | null;
     type?: string | null;
     amount?: number | null;
@@ -169,11 +170,18 @@ async function expireTx(
   if (t.user_id) {
     const amt = t.amount ?? null;
     await sendWebhook(DB, t.user_id, "transaction.expired", {
-      transaction_id: t.id,
+      trx_id: t.trx_id,
       amount: amt,
       base_amount: t.base_amount ?? null,
       unique_code: t.unique_code ?? null,
-      fee_amount: amt != null ? feeOf({ amount: amt, base_amount: t.base_amount ?? null, unique_code: t.unique_code ?? null }) : null,
+      fee_amount:
+        amt != null
+          ? feeOf({
+              amount: amt,
+              base_amount: t.base_amount ?? null,
+              unique_code: t.unique_code ?? null,
+            })
+          : null,
       merchant_id: merchantId,
       expired_at: Date.now(),
     });
@@ -197,13 +205,17 @@ async function expireTx(
     broadcast(env, {
       type: "qris_expired",
       userId: t.user_id,
-      data: { id: t.id, merchantId, status: "expired" },
+      data: { id: t.id, trx_id: t.trx_id, merchantId, status: "expired" },
     });
   }
 }
 
 /** Cek apakah masih ada transaksi pending (limit 1). */
 export async function hasPending(DB: Db): Promise<boolean> {
-  const rows = await queryTransactions(DB, { status: "pending", limit: 1 });
+  const rows = await queryTransactions(DB, {
+    status: "pending",
+    excludeSandbox: true,
+    limit: 1,
+  });
   return rows.length > 0;
 }

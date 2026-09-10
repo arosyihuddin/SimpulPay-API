@@ -1,4 +1,4 @@
-import { eq, and, or, ilike, lt, gte, lte, desc, sql } from "drizzle-orm";
+import { eq, and, or, ilike, lt, gte, lte, desc, sql, isNotNull } from "drizzle-orm";
 import { transactions, merchants } from "../schema";
 import type { Db } from "../client";
 
@@ -22,7 +22,7 @@ export async function insertTransaction(
     baseAmount: number;
     uniqueCode: number;
     trxId: string;
-    merchantId: string;
+    merchantId: string | null;
     userId: string;
     createdAt: number;
     expiresAt: number;
@@ -89,12 +89,14 @@ type TxFilter = {
   createdTo?: number;
   expiresFrom?: number;
   expiresTo?: number;
+  excludeSandbox?: boolean;
 };
 
 function txConds(o: TxFilter) {
   const conds = [];
   if (o.merchantId) conds.push(eq(transactions.merchant_id, o.merchantId));
   if (o.userId) conds.push(eq(transactions.user_id, o.userId));
+  if (o.excludeSandbox) conds.push(isNotNull(transactions.merchant_id));
   if (o.status) conds.push(eq(transactions.status, o.status));
   if (o.q) {
     const like = `%${o.q}%`;
@@ -192,7 +194,7 @@ export async function paidIncomeByMerchant(
     .orderBy(desc(sql`sum(${transactions.amount})`));
   return rows.map((r) => ({
     merchant_id: r.merchant_id ?? "",
-    merchant_name: r.merchant_name,
+    merchant_name: r.merchant_name ?? (r.merchant_id ? null : "Sandbox"),
     total: Number(r.total ?? 0),
   }));
 }

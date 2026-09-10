@@ -40,14 +40,13 @@ export async function listTransactions(c: Context<AppEnv>) {
   await markTransactionsExpired(DB, Date.now());
   const [rows, counts] = await Promise.all([
     queryTransactions(DB, { ...filter, limit, offset }),
-    // Counts global (hanya per-user) — tidak terpengaruh filter q/status/tanggal.
     countTransactionsByStatus(DB, { userId }),
   ]);
   const txns = rows.map((t) => ({
     id: t.id,
     trx_id: t.trx_id,
     merchant_id: t.merchant_id,
-    merchant_name: t.merchant_name,
+    merchant_name: t.merchant_name ?? (t.merchant_id ? null : "Sandbox"),
     amount: t.amount,
     base_amount: t.base_amount,
     fee_amount: feeOf(t),
@@ -74,7 +73,21 @@ export async function getTransactionCode(c: Context<AppEnv>) {
   const userId = currentUserId(c);
   const id = c.req.param("id") ?? "";
   const tx = await getTransaction(DB, id);
-  if (!tx || !tx.merchant_id) bad("Transaksi tidak ditemukan", 404);
+  if (!tx) bad("Transaksi tidak ditemukan", 404);
+  if (tx.merchant_id === null) {
+    if (tx.user_id !== userId) bad("Transaksi tidak ditemukan", 404);
+    return c.json({
+      success: true,
+      data: {
+        code: tx.code,
+        status: tx.status,
+        created_at: tx.created_at,
+        expires_at: tx.expires_at,
+        merchant_id: null,
+        merchant_name: "Sandbox",
+      },
+    });
+  }
   const m = await ownedMerchant(DB, userId, tx.merchant_id);
   return c.json({
     success: true,
@@ -100,7 +113,7 @@ export async function recentTransactions(c: Context<AppEnv>) {
     id: t.id,
     trx_id: t.trx_id,
     merchant_id: t.merchant_id,
-    merchant_name: t.merchant_name,
+    merchant_name: t.merchant_name ?? (t.merchant_id ? null : "Sandbox"),
     amount: t.amount,
     fee_amount: feeOf(t),
     status: t.status,
@@ -157,11 +170,10 @@ export async function transactionVolume(c: Context<AppEnv>) {
   const userId = currentUserId(c);
   const paid = await paidTransactionsInRange(DB, { from, to, userId });
 
-  const data = buckets.map(
-    (b) =>
-      paid
-        .filter((t) => t.created_at >= b.from && t.created_at <= b.to)
-        .reduce((s, t) => s + t.amount, 0),
+  const data = buckets.map((b) =>
+    paid
+      .filter((t) => t.created_at >= b.from && t.created_at <= b.to)
+      .reduce((s, t) => s + t.amount, 0),
   );
 
   return c.json({

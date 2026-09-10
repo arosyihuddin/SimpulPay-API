@@ -26,6 +26,27 @@ export const createQrisRes = okRes.extend({
     expires_at: z.number(),
   }),
 });
+export const createSandboxRes = okRes.extend({
+  data: z.object({
+    qris_id: z.string(),
+    trx_id: z.string(),
+    merchant_id: z.null(),
+    qris_code: z.string(),
+    amount: z.number(),
+    fee_amount: z.number(),
+    unique_code: z.number(),
+    amount_to_pay: z.number(),
+    expires_at: z.number(),
+  }),
+});
+export const simulatePayRes = okRes.extend({
+  paid: z.boolean(),
+  already: z.boolean().optional(),
+});
+export const simulateExpireRes = okRes.extend({
+  expired: z.boolean(),
+  already: z.boolean().optional(),
+});
 
 export const getQrisRes = okRes.extend({
   data: z.object({

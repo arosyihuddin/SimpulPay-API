@@ -1,5 +1,12 @@
 import { getValidHeaders } from "./sessionManager";
-import { claimTx, getClaim, getMerchant, getTransaction, feeOf, insertLog } from "../db/repositories";
+import {
+  claimTx,
+  getClaim,
+  getMerchant,
+  getTransaction,
+  feeOf,
+  insertLog,
+} from "../db/repositories";
 import { getMerchantId } from "./qris";
 import { checkDailyPaidLimit } from "./limits";
 import { sendWebhook } from "./webhook";
@@ -224,7 +231,7 @@ export async function verifyPayment(
             if (transactionId) {
               const row = await getTransaction(DB, transactionId);
               await sendWebhook(DB, merchant.user_id, "transaction.paid", {
-                transaction_id: transactionId,
+                trx_id: row?.trx_id,
                 amount: row?.amount ?? txAmount,
                 base_amount: row?.base_amount ?? null,
                 unique_code: row?.unique_code ?? null,
@@ -245,7 +252,10 @@ export async function verifyPayment(
             transaction_time: tx.transaction_time || tx.settlement_time,
           };
         }
-      } else if (transactionId && existingClaim.transaction_id === transactionId) {
+      } else if (
+        transactionId &&
+        existingClaim.transaction_id === transactionId
+      ) {
         return {
           transaction_id: txId,
           order_id: tx.order_id,

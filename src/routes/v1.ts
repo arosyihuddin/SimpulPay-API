@@ -9,9 +9,17 @@ import {
   checkPayment,
 } from "../controllers/v1.controller";
 import {
+  createSandboxQris,
+  simulateSandboxPay,
+  simulateSandboxExpire,
+} from "../controllers/sandbox.controller";
+import {
   v1HealthRes,
   createQrisReq,
   createQrisRes,
+  createSandboxRes,
+  simulatePayRes,
+  simulateExpireRes,
   getQrisRes,
   paymentCheckReq,
   paymentCheckRes,
@@ -109,6 +117,68 @@ reg(
     },
   }),
   checkPayment,
+);
+reg(
+  createRoute({
+    method: "post",
+    path: "/sandbox/qris",
+    tags: ["Sandbox"],
+    summary: "Buat QRIS sandbox (tanpa merchant, tanpa pooling)",
+    request: {
+      body: { content: { "application/json": { schema: createQrisReq } } },
+    },
+    responses: {
+      200: {
+        description: "QRIS sandbox dibuat",
+        content: { "application/json": { schema: createSandboxRes } },
+      },
+      400: {
+        description: "Nominal tidak valid",
+        content: { "application/json": { schema: errorRes } },
+      },
+    },
+  }),
+  createSandboxQris,
+);
+reg(
+  createRoute({
+    method: "post",
+    path: "/sandbox/qris/{id}/simulate-pay",
+    tags: ["Sandbox"],
+    summary: "Simulasi bayar QRIS sandbox (kirim webhook)",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: {
+        description: "Simulasi lunas",
+        content: { "application/json": { schema: simulatePayRes } },
+      },
+      404: {
+        description: "QRIS sandbox tidak ditemukan",
+        content: { "application/json": { schema: errorRes } },
+      },
+    },
+  }),
+  simulateSandboxPay,
+);
+reg(
+  createRoute({
+    method: "post",
+    path: "/sandbox/qris/{id}/simulate-expire",
+    tags: ["Sandbox"],
+    summary: "Simulasi expired QRIS sandbox (kirim webhook)",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+      200: {
+        description: "Simulasi kedaluwarsa",
+        content: { "application/json": { schema: simulateExpireRes } },
+      },
+      404: {
+        description: "QRIS sandbox tidak ditemukan",
+        content: { "application/json": { schema: errorRes } },
+      },
+    },
+  }),
+  simulateSandboxExpire,
 );
 
 export { v1Routes };

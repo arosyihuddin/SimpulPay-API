@@ -1,5 +1,5 @@
 import { verifyMerchantPending, hasPending } from "../services/pooling";
-import { getUserSettings } from "../db/repositories";
+import { getUserSettings, queryTransactions } from "../db/repositories";
 import { poolingIntervalMs } from "../services/settings";
 import { createDb } from "../db/client";
 import type { DurableObject } from "@cloudflare/workers-types";
@@ -148,8 +148,7 @@ export class AppHub implements DurableObject {
   }
 
   private async getPendingRows(DB: Db) {
-    const { queryTransactions } = await import("../db/repositories");
-    return queryTransactions(DB, { status: "pending", limit: 500 });
+    return queryTransactions(DB, { status: "pending", excludeSandbox: true, limit: 500 });
   }
 
   /** pooling_interval terkecil (detik, legacy ms ikut dikonversi) dari user yg punya pending. */

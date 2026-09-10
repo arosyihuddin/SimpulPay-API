@@ -44,7 +44,11 @@ import {
   createSubscriptionCtl,
 } from "../controllers/customer/subscriptions.controller";
 import { listMyInvoicesCtl } from "../controllers/customer/invoices.controller";
-
+import {
+  createSandboxQris,
+  simulateSandboxPay,
+  simulateSandboxExpire,
+} from "../controllers/sandbox.controller";
 // Customer gak masuk spec OpenAPI (swagger cuma untuk API v1) — pakai Hono biasa.
 const customerRoutes = new Hono<AppEnv>();
 
@@ -66,6 +70,10 @@ customerRoutes.get(
   ...customerAuth,
   getTransactionCode,
 );
+// Sandbox: QRIS tanpa merchant (merchant_id NULL), bayar via tombol simulasi.
+customerRoutes.post("/sandbox/qris", ...customerAuth, createSandboxQris);
+customerRoutes.post("/sandbox/qris/:id/simulate-pay", ...customerAuth, simulateSandboxPay);
+customerRoutes.post("/sandbox/qris/:id/simulate-expire", ...customerAuth, simulateSandboxExpire);
 
 // Merchants
 customerRoutes.post("/merchants", ...customerAuth, createMerchantCtl);
