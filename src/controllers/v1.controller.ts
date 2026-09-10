@@ -89,6 +89,8 @@ export async function createQris(c: Context<AppEnv>) {
     expiresAt,
   });
   await insertLog(DB, "INFO", `QRIS dinamis dibuat via API v1 | Merchant ${merchantId} | TRX-ID: ${trxId} | Rp ${base} (+${code})`);
+  const stub = c.env.APP_HUB.get(c.env.APP_HUB.idFromName("global"));
+  c.executionCtx.waitUntil(stub.fetch("http://internal/start-pooling"));
   return c.json(
     ok({
       data: {
