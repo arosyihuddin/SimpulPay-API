@@ -22,7 +22,7 @@ export async function createPlanCtl(c: Context<AppEnv>) {
     maxMerchants: parseInt(body?.max_merchants ?? "1", 10) || 1,
     dailyPaidLimit: Number.isNaN(dpl) ? null : dpl,
     featuresJson: body?.features_json ? JSON.stringify(body.features_json) : null,
-    active: body?.active !== false,
+    active: body?.active === true,
   });
   return c.json({ success: true, data: { id } });
 }

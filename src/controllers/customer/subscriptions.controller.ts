@@ -121,6 +121,7 @@ export async function createSubscriptionCtl(c: Context<AppEnv>) {
   if (!planId) bad("plan_id wajib diisi");
   const plan = await getPlan(DB, planId);
   if (!plan) bad("Plan tidak ditemukan", 404);
+  if (!plan.active) bad("Plan belum tersedia", 404);
   const now = Date.now();
 
   // Upgrade/downgrade berbayar: pending dulu, bayar via QRIS merchant admin.

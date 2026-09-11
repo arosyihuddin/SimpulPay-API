@@ -112,6 +112,7 @@ export async function createUserCtl(c: Context<AppEnv>) {
   if (body?.plan_id && body.plan_id !== "p_free") {
     const plan = await getPlan(DB, body.plan_id);
     if (!plan) bad("Plan tidak ditemukan", 404);
+    if (!plan.active) bad("Plan belum dipublish", 400);
     const subId = "sub_" + crypto.randomUUID().slice(0, 8);
     const now = Date.now();
     const endsAt = now + MONTH_MS;

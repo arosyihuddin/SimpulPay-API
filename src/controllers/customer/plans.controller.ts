@@ -16,5 +16,7 @@ export async function getPlanCtl(c: Context<AppEnv>) {
   const id = c.req.param("id") ?? "";
   const plan = await getPlan(DB, id);
   if (!plan) bad("Plan tidak ditemukan", 404);
+  // Draft disembunyikan dari customer; admin tetap bisa baca.
+  if (!plan.active && c.get("user")?.role !== "admin") bad("Plan tidak ditemukan", 404);
   return c.json({ success: true, data: plan });
 }
