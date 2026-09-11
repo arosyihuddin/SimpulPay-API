@@ -23,6 +23,7 @@ export async function createPlanCtl(c: Context<AppEnv>) {
     dailyPaidLimit: Number.isNaN(dpl) ? null : dpl,
     featuresJson: body?.features_json ? JSON.stringify(body.features_json) : null,
     active: body?.active === true,
+    isFeatured: body?.is_featured === true || body?.is_featured === "true",
   });
   return c.json({ success: true, data: { id } });
 }
@@ -51,6 +52,7 @@ export async function updatePlanCtl(c: Context<AppEnv>) {
   }
   if (body?.features_json !== undefined) patch.featuresJson = JSON.stringify(body.features_json);
   if (body?.active !== undefined) patch.active = body.active === true || body.active === "true";
+  if (body?.is_featured !== undefined) patch.isFeatured = body.is_featured === true || body.is_featured === "true";
   await updatePlan(DB, id, patch);
   return c.json({ success: true });
 }

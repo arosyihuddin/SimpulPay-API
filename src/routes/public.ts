@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { swaggerUI } from "@hono/swagger-ui";
 import type { AppEnv } from "../types";
-import { health, apiHealth } from "../controllers/public.controller";
+import { health, apiHealth, listPublicPlans } from "../controllers/public.controller";
 import { login, logout } from "../controllers/customer/auth";
 import { googleCallback, googleStart } from "../controllers/customer/oauth";
 import { sessionOk } from "../middleware/guards";
@@ -17,6 +17,7 @@ publicRoutes.get("/auth/google", googleStart);
 publicRoutes.get("/auth/google/callback", googleCallback);
 publicRoutes.get("/health", health);
 publicRoutes.get("/api/health", apiHealth);
+publicRoutes.get("/public/plans", listPublicPlans);
 publicRoutes.get("/docs", swaggerUI({ url: "/docs/json" }));
 publicRoutes.get("/ws", async (c) => {
   const upgradeHeader = c.req.header("Upgrade");

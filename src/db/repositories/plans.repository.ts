@@ -15,6 +15,7 @@ export async function createPlan(
     dailyPaidLimit?: number | null;
     featuresJson?: string | null;
     active?: boolean;
+    isFeatured?: boolean;
   },
 ) {
   const now = Date.now();
@@ -27,6 +28,7 @@ export async function createPlan(
     daily_paid_limit: p.dailyPaidLimit ?? null,
     features_json: p.featuresJson ?? null,
     active: p.active ?? true,
+    is_featured: p.isFeatured ?? false,
     created_at: now,
     updated_at: now,
   });
@@ -58,6 +60,7 @@ export async function updatePlan(
     dailyPaidLimit?: number | null;
     featuresJson?: string | null;
     active?: boolean;
+    isFeatured?: boolean;
   },
 ) {
   const now = Date.now();
@@ -69,7 +72,7 @@ export async function updatePlan(
   if (p.dailyPaidLimit !== undefined) sets.daily_paid_limit = p.dailyPaidLimit;
   if (p.featuresJson !== undefined) sets.features_json = p.featuresJson;
   if (p.active !== undefined) sets.active = p.active;
-  if (Object.keys(sets).length === 1) return;
+  if (p.isFeatured !== undefined) sets.is_featured = p.isFeatured;
   await db.update(plans).set(sets).where(eq(plans.id, id));
 }
 

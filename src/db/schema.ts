@@ -175,6 +175,7 @@ export const plans = pgTable("plans", {
   daily_paid_limit: integer("daily_paid_limit"),
   features_json: text("features_json"),
   active: boolean("active").notNull().default(true),
+  is_featured: boolean("is_featured").notNull().default(false),
   created_at: bigint("created_at", { mode: "number" }).notNull(),
   updated_at: bigint("updated_at", { mode: "number" }).notNull(),
 });

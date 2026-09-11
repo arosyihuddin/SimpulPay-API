@@ -121,6 +121,7 @@ export const maintenanceGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
     path === "/logout" ||
     path === "/health" ||
     path === "/api/health" ||
+    path === "/public/plans" ||
     path === "/auth/google" ||
     path === "/auth/google/callback"
   )

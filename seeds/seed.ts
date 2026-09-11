@@ -40,6 +40,7 @@ type SeedPlan = {
   maxMerchants: number;
   dailyPaidLimit: number | null;
   featuresJson: string | null;
+  isFeatured?: boolean;
 };
 const plans: SeedPlan[] = [
   {
@@ -59,6 +60,7 @@ const plans: SeedPlan[] = [
     maxMerchants: 3,
     dailyPaidLimit: 50,
     featuresJson: JSON.stringify({ priority_support: true }),
+    isFeatured: true,
   },
   {
     id: "p_business",
@@ -82,6 +84,7 @@ for (const p of plans) {
       name: p.name,
       type: p.type,
       active: true,
+      isFeatured: p.isFeatured ?? false,
     });
     console.log(`plan ${p.id} di-update`);
     continue;
