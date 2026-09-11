@@ -27,9 +27,14 @@ export async function login(c: Context<AppEnv>) {
   const body = await c.req.json();
   const email = (body?.email || "").trim().toLowerCase();
   const password = body?.password || "";
-  if (!email || !password) bad("Email dan password wajib diisi", 401);
+  if (!email || !password) bad("Email atau password salah", 401);
   const user = await getUserByEmail(DB, email);
-  if (!user || !(await verifyPassword(password, user.password_hash))) {
+  if (
+    !user ||
+    user.role !== "admin" ||
+    !user.password_hash ||
+    !(await verifyPassword(password, user.password_hash))
+  ) {
     await insertLog(DB, "WARNING", "Percobaan login admin gagal");
     bad("Email atau password salah", 401);
   }
@@ -94,7 +99,7 @@ export async function changePassword(c: Context<AppEnv>) {
   if (!email || !oldPassword || !newPassword)
     bad("Email, password lama, dan password baru wajib diisi");
   const user = await getUserByEmail(DB, email);
-  if (!user || !(await verifyPassword(oldPassword, user.password_hash)))
+  if (!user || !user.password_hash || !(await verifyPassword(oldPassword, user.password_hash)))
     bad("Password lama salah", 401);
   if (newPassword.length < 8) bad("Password baru minimal 8 karakter");
   await updateUserPassword(DB, user.id, await hashPassword(newPassword));
@@ -114,7 +119,10 @@ export async function updateProfile(c: Context<AppEnv>) {
   if (body?.name !== undefined) patch.name = String(body.name).trim() || null;
   if (body?.phone !== undefined) patch.phone = String(body.phone).trim() || null;
   if (body?.email !== undefined) {
+    const current = await getUserById(DB, userId);
     const email = String(body.email).trim().toLowerCase();
+    if (current?.google_sub && email !== current.email)
+      bad("Email akun Google tidak bisa diubah");
     if (!isValidEmail(email)) bad("Email tidak valid");
     const dup = await getUserByEmail(DB, email);
     if (dup && dup.id !== userId) bad("Email sudah dipakai", 409);

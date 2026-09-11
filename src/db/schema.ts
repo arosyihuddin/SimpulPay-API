@@ -108,7 +108,8 @@ export const adminSessions = pgTable("admin_sessions", {
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
-  password_hash: text("password_hash").notNull(),
+  password_hash: text("password_hash"),
+  google_sub: text("google_sub").unique(),
   name: text("name"),
   phone: text("phone"),
   settings_json: text("settings_json"),

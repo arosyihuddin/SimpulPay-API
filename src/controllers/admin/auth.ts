@@ -95,15 +95,16 @@ export async function createUserCtl(c: Context<AppEnv>) {
   const password = body?.password || "";
   const role = (body?.role || "customer").trim();
   if (!isValidEmail(email)) bad("Email tidak valid");
-  if (password.length < 8) bad("Password minimal 8 karakter");
-  if (await getUserByEmail(DB, email)) bad("Email sudah dipakai", 409);
   if (!["admin", "customer"].includes(role))
     bad("Role harus 'admin' atau 'customer'");
+  if (!password ? role === "admin" : password.length < 8)
+    bad("Password minimal 8 karakter");
+  if (await getUserByEmail(DB, email)) bad("Email sudah dipakai", 409);
   const id = crypto.randomUUID();
   await createUser(DB, {
     id,
     email,
-    passwordHash: await hashPassword(password),
+    passwordHash: password ? await hashPassword(password) : null,
     role: role as "admin" | "customer",
   });
 

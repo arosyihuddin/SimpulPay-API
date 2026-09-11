@@ -9,6 +9,10 @@ export interface Env {
   SUB_TIMER: DurableObjectNamespace;
   CORS_ORIGINS?: string;
   LOG_LEVEL?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REDIRECT_URI?: string;
+  FRONTEND_URL?: string;
 }
 
 export type AppEnv = {

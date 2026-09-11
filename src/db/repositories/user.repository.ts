@@ -45,12 +45,22 @@ export async function getUserByEmail(
   return rows[0] ?? null;
 }
 
+export async function getUserByGoogleSub(
+  db: Db,
+  sub: string,
+): Promise<UserRow | null> {
+  const rows = await db.select().from(users).where(eq(users.google_sub, sub));
+  return rows[0] ?? null;
+}
+
 export async function createUser(
   db: Db,
   u: {
     id: string;
     email: string;
-    passwordHash: string;
+    passwordHash: string | null;
+    googleSub?: string | null;
+    name?: string | null;
     role?: "admin" | "customer";
     status?: "active" | "suspended" | "banned";
   },
@@ -60,6 +70,8 @@ export async function createUser(
     id: u.id,
     email: u.email,
     password_hash: u.passwordHash,
+    google_sub: u.googleSub ?? null,
+    name: u.name ?? null,
     role: u.role ?? "admin",
     status: u.status ?? "active",
     created_at: now,
@@ -75,7 +87,8 @@ export async function updateUser(
     name?: string | null;
     phone?: string | null;
     role?: "admin" | "customer";
-    passwordHash?: string;
+    passwordHash?: string | null;
+    googleSub?: string | null;
     status?: "active" | "suspended" | "banned";
   },
 ) {
@@ -86,6 +99,7 @@ export async function updateUser(
   if (u.phone !== undefined) sets.phone = u.phone;
   if (u.role !== undefined) sets.role = u.role;
   if (u.passwordHash !== undefined) sets.password_hash = u.passwordHash;
+  if (u.googleSub !== undefined) sets.google_sub = u.googleSub;
   if (u.status !== undefined) sets.status = u.status;
   if (Object.keys(sets).length === 1) return; // hanya updated_at — tak ada yang diubah
   await db.update(users).set(sets).where(eq(users.id, id));

@@ -3,6 +3,7 @@ import { swaggerUI } from "@hono/swagger-ui";
 import type { AppEnv } from "../types";
 import { health, apiHealth } from "../controllers/public.controller";
 import { login, logout } from "../controllers/customer/auth";
+import { googleCallback, googleStart } from "../controllers/customer/oauth";
 import { sessionOk } from "../middleware/guards";
 import { cookieToken } from "../utils/auth.helper";
 import { getDb } from "../db/client";
@@ -12,6 +13,8 @@ const publicRoutes = new Hono<AppEnv>();
 
 publicRoutes.post("/login", login);
 publicRoutes.post("/logout", logout);
+publicRoutes.get("/auth/google", googleStart);
+publicRoutes.get("/auth/google/callback", googleCallback);
 publicRoutes.get("/health", health);
 publicRoutes.get("/api/health", apiHealth);
 publicRoutes.get("/docs", swaggerUI({ url: "/docs/json" }));
