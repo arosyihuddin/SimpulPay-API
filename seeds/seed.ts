@@ -4,8 +4,8 @@
  * Usage: bun run seed
  */
 import "dotenv/config";
-import postgres from "postgres";
-import { drizzle } from "drizzle-orm/postgres-js";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "../src/db/schema";
 import {
   createPlan,
@@ -25,9 +25,8 @@ if (!cs) {
   process.exit(1);
 }
 
-// Seed jalan di bun/node (TCP ok), bukan di Workers — postgres.js tetap cocok.
-const client = postgres(cs, { max: 1, onnotice: () => {} });
-const db = drizzle(client, { schema });
+// Seed jalan di bun/node tapi pakai neon-http juga — query lewat fetch, tipe Db sama.
+const db = drizzle(neon(cs), { schema });
 
 // ── Plans ───────────────────────────────────────────
 // dailyPaidLimit: null = unlimited (Business). Harga dalam rupiah.
@@ -41,6 +40,12 @@ type SeedPlan = {
   featuresJson: string | null;
   isFeatured?: boolean;
 };
+const FEATURES = JSON.stringify([
+  "Qris Dinamis",
+  "Sandbox",
+  "Webhook Realtime",
+  "Api Key",
+]);
 const plans: SeedPlan[] = [
   {
     id: "p_free",
@@ -49,7 +54,7 @@ const plans: SeedPlan[] = [
     price: 0,
     maxMerchants: 1,
     dailyPaidLimit: 10,
-    featuresJson: null,
+    featuresJson: FEATURES,
   },
   {
     id: "p_starter",
@@ -58,7 +63,7 @@ const plans: SeedPlan[] = [
     price: 49000,
     maxMerchants: 3,
     dailyPaidLimit: 50,
-    featuresJson: JSON.stringify({ priority_support: true }),
+    featuresJson: FEATURES,
     isFeatured: true,
   },
   {
@@ -68,7 +73,7 @@ const plans: SeedPlan[] = [
     price: 79000,
     maxMerchants: 10,
     dailyPaidLimit: null,
-    featuresJson: JSON.stringify({ priority_support: true, analytics: true }),
+    featuresJson: FEATURES,
   },
 ];
 
@@ -94,7 +99,7 @@ for (const p of plans) {
 
 // ── Admin user ──────────────────────────────────────
 const adminEmail = process.env.ADMIN_EMAIL || "admin@simpulpay.com";
-const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+const adminPassword = process.env.ADMIN_PASSWORD || "SandiNyaAdmin123";
 const existingAdmin = await getUserByEmail(db, adminEmail);
 if (!existingAdmin) {
   await createUser(db, {
@@ -112,5 +117,4 @@ if (!existingAdmin) {
 await setSystemSetting(db, "maintenance", "false");
 console.log("system_settings maintenance=false (default)");
 
-await client.end();
 console.log("seed selesai ✓");
