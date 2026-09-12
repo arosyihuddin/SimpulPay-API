@@ -12,6 +12,17 @@ import type { AppEnv, Env } from "./types";
 import { logger, setLogLevel } from "./utils/logger";
 import { AppHub } from "./durable_objects/appHub";
 import { SubTimer } from "./durable_objects/subTimer";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
+function errDetail(err: unknown): string {
+  const msg = err instanceof Error ? err.message : "unknown error";
+  if (err !== null && typeof err === "object" && "cause" in err) {
+    const cause = err.cause;
+    if (cause !== null && typeof cause === "object" && "message" in cause && typeof cause.message === "string") {
+      return `${msg} | cause: ${cause.message}`;
+    }
+  }
+  return msg;
+}
 
 const app = new OpenAPIHono<AppEnv>();
 
@@ -66,11 +77,53 @@ app.openAPIRegistry.registerComponent("securitySchemes", "ApiKey", {
 app.get("*", (c) => c.json({ success: false, message: "Not Found" }, 404));
 
 app.onError((err, c) => {
-  const status = (err as any).status || 500;
-  const body: any = { success: false, message: err.message };
-  const extra = (err as any).extra;
-  if (extra) Object.assign(body, extra);
-  return c.json(body, status);
+  let code: ContentfulStatusCode = 500;
+  let appError = false;
+  if (err !== null && typeof err === "object" && "status" in err && typeof err.status === "number") {
+    appError = true;
+    switch (err.status) {
+      case 400:
+        code = 400;
+        break;
+      case 401:
+        code = 401;
+        break;
+      case 403:
+        code = 403;
+        break;
+      case 404:
+        code = 404;
+        break;
+      case 410:
+        code = 410;
+        break;
+      case 503:
+        code = 503;
+        break;
+      default:
+        code = 500;
+        break;
+    }
+  }
+  const body: Record<string, unknown> = {
+    success: false,
+    message: appError && err instanceof Error ? err.message : "Terjadi kesalahan internal",
+  };
+  if (appError && err !== null && typeof err === "object" && "extra" in err) {
+    if (err.extra !== null && typeof err.extra === "object") Object.assign(body, err.extra);
+  }
+  let detail = err instanceof Error ? err.message : "unknown error";
+  if (err !== null && typeof err === "object" && "cause" in err) {
+    const cause = err.cause;
+    if (cause !== null && typeof cause === "object" && "message" in cause && typeof cause.message === "string") {
+      detail += ` | cause: ${cause.message}`;
+    }
+    if (cause !== null && typeof cause === "object" && "code" in cause && typeof cause.code === "string") {
+      detail += ` | code: ${cause.code}`;
+    }
+  }
+  logger.error(`[fetch] ${detail}`);
+  return c.json(body, code);
 });
 
 export { AppHub, SubTimer };
@@ -85,23 +138,19 @@ export default {
       try {
         await cleanOldClaims(DB);
       } catch (err) {
-        logger.error(`[cron] Gagal cleanup klaim: ${(err as Error).message}`);
+        logger.error(`[cron] Gagal cleanup klaim: ${errDetail(err)}`);
       }
       // retry webhook queue
       try {
         await processWebhookQueue(DB);
       } catch (err) {
-        logger.error(
-          `[cron] Gagal process webhook queue: ${(err as Error).message}`,
-        );
+        logger.error(`[cron] Gagal process webhook queue: ${errDetail(err)}`);
       }
       try {
         const stub = env.APP_HUB.get(env.APP_HUB.idFromName("global"));
         await stub.fetch("http://internal/start-pooling");
       } catch (err) {
-        logger.error(
-          `[cron] Gagal pancing DO pooling: ${(err as Error).message}`,
-        );
+        logger.error(`[cron] Gagal pancing DO pooling: ${errDetail(err)}`);
       }
     }
     await DBClient.end().catch(() => {});
