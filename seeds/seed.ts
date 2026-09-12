@@ -19,14 +19,13 @@ import {
 import { setSystemSetting } from "../src/db/repositories/systemSettings.repository";
 import { hashPassword } from "../src/utils/auth.helper";
 
-const cs =
-  process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE ??
-  process.env.DATABASE_URL;
+const cs = process.env.DATABASE_URL;
 if (!cs) {
-  console.error("DATABASE_URL / HYPERDRIVE local belum di-set di .env");
+  console.error("DATABASE_URL belum di-set di .env");
   process.exit(1);
 }
 
+// Seed jalan di bun/node (TCP ok), bukan di Workers — postgres.js tetap cocok.
 const client = postgres(cs, { max: 1, onnotice: () => {} });
 const db = drizzle(client, { schema });
 

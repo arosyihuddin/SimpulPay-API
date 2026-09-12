@@ -47,54 +47,50 @@ export class SubTimer implements DurableObject {
   async alarm() {
     const job = await this.state.storage.get<SubExpiryJob>("job");
     if (!job) return;
-    const handle = createDb(this.env);
-    try {
-      const sub = await getSubscription(handle.db, job.subId);
-      if (!sub || sub.status !== "active") return;
-      logger.debug(`[Sub-Pool] Subscriptions UserId ${sub.user_id}`);
-      const endsAt = sub.ends_at ?? job.endsAt;
-      if (!endsAt) {
-        await this.state.storage.delete("job");
-        return;
-      }
-      if (endsAt > Date.now()) {
-        await this.state.storage.setAlarm(endsAt);
-        return;
-      }
-      await updateSubscription(handle.db, sub.id, { status: "expired" });
-      await insertLog(
-        handle.db,
-        "INFO",
-        `Sub ${sub.id} expired (DO timer); user ${sub.user_id} turun ke free`,
-        null,
-        sub.user_id,
-      );
-      const freePlan = await getPlan(handle.db, "p_free");
-      await broadcast(this.env, {
-        type: "subscription_cancelled",
-        userId: sub.user_id,
-        data: {
-          plan_id: "p_free",
-          plan_name: freePlan?.name,
-          max_merchant: freePlan?.max_merchants,
-          daily_paid_limit: freePlan?.daily_paid_limit,
-          type: freePlan?.type,
-          status: "active",
-          created_at: Date.now(),
-        },
-      });
-      await createNotifications(handle.db, this.env, {
-        type: "subscription_cancelled",
-        toUser: {
-          userId: sub.user_id,
-          title: "Langganan Berakhir",
-          message: "Masa aktif langganan habis. Perpanjang dari menu Billing.",
-        },
-      });
+    const { db } = createDb(this.env);
+    const sub = await getSubscription(db, job.subId);
+    if (!sub || sub.status !== "active") return;
+    logger.debug(`[Sub-Pool] Subscriptions UserId ${sub.user_id}`);
+    const endsAt = sub.ends_at ?? job.endsAt;
+    if (!endsAt) {
       await this.state.storage.delete("job");
-    } finally {
-      await handle.client.end().catch(() => {});
+      return;
     }
+    if (endsAt > Date.now()) {
+      await this.state.storage.setAlarm(endsAt);
+      return;
+    }
+    await updateSubscription(db, sub.id, { status: "expired" });
+    await insertLog(
+      db,
+      "INFO",
+      `Sub ${sub.id} expired (DO timer); user ${sub.user_id} turun ke free`,
+      null,
+      sub.user_id,
+    );
+    const freePlan = await getPlan(db, "p_free");
+    await broadcast(this.env, {
+      type: "subscription_cancelled",
+      userId: sub.user_id,
+      data: {
+        plan_id: "p_free",
+        plan_name: freePlan?.name,
+        max_merchant: freePlan?.max_merchants,
+        daily_paid_limit: freePlan?.daily_paid_limit,
+        type: freePlan?.type,
+        status: "active",
+        created_at: Date.now(),
+      },
+    });
+    await createNotifications(db, this.env, {
+      type: "subscription_cancelled",
+      toUser: {
+        userId: sub.user_id,
+        title: "Langganan Berakhir",
+        message: "Masa aktif langganan habis. Perpanjang dari menu Billing.",
+      },
+    });
+    await this.state.storage.delete("job");
   }
 }
 

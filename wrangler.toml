@@ -9,10 +9,6 @@ bindings = [
   { name = "SUB_TIMER", class_name = "SubTimer" },
 ]
 
-[[hyperdrive]]
-binding = "HYPERDRIVE"
-id = "932d6f4c012f4ceb819735e075429723"
-
 [exports.AppHub]
 type = "durable-object"
 storage = "sqlite"

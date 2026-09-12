@@ -6,10 +6,7 @@ export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./drizzle",
   dbCredentials: {
-    // .env pakai key Hyperdrive local (wrangler dev); DATABASE_URL jadi fallback.
-    url:
-      process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE ??
-      process.env.DATABASE_URL ??
-      "",
+    // Lokal (bun/node, TCP ok): pakai Neon direct URL via DATABASE_URL.
+    url: process.env.DATABASE_URL ?? "",
   },
 });

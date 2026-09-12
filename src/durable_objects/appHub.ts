@@ -143,7 +143,6 @@ export class AppHub implements DurableObject {
       }
     } finally {
       this.pooling = false;
-      await handle.client.end().catch(() => {});
     }
   }
 

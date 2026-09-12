@@ -1,59 +1,33 @@
-import postgres, { type Sql } from "postgres";
-import { drizzle } from "drizzle-orm/postgres-js";
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
+import type { NeonHttpDatabase } from "drizzle-orm/neon-http";
 import type { Context } from "hono";
 import type { AppEnv, Env } from "../types";
 import * as schema from "./schema";
 
-export type Db = PostgresJsDatabase<typeof schema>;
-
-function createClient(env: Env): Sql {
-  const cs = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL;
-  if (!cs) throw new Error("DATABASE_URL / HYPERDRIVE belum di-set");
-  return postgres(cs, {
-    max: 2,
-    idle_timeout: 0,
-    connect_timeout: 10,
-    onnotice: () => {},
-    types: {
-      bigint: {
-        to: 20,
-        from: [20],
-        serialize: (v: bigint) => String(v),
-        parse: (v: string) => Number(v),
-      },
-    },
-  });
-}
+export type Db = NeonHttpDatabase<typeof schema>;
 
 interface DbHandle {
-  client: Sql;
   db: Db;
 }
 
-function createHandle(env: Env): DbHandle {
-  const client = createClient(env);
-  return { client, db: drizzle(client, { schema }) };
-}
-
-// Untuk scheduled handler (tidak ada Hono context) — wajib end() manual via handle.client.
+// Untuk scheduled handler (tidak ada Hono context).
+// neon-http: query lewat fetch, tanpa TCP pool / client.end().
 export function createDb(env: Env): DbHandle {
-  return createHandle(env);
+  const cs = env.DATABASE_URL;
+  if (!cs) throw new Error("DATABASE_URL belum di-set");
+  return { db: drizzle(neon(cs), { schema }) };
 }
 
 export function getDb(c: Context<AppEnv>): Db {
   const existing = c.get("db");
   if (existing) return existing.db;
-  const handle = createHandle(c.env);
+  const handle = createDb(c.env);
   c.set("db", handle);
   return handle.db;
 }
 
+// No-op: neon-http stateless, tak ada koneksi untuk ditutup.
 export async function closeDb(c: Context<AppEnv>): Promise<void> {
-  const handle = c.get("db");
-  if (!handle) return;
-  try {
-    await handle.client.end();
-  } catch {}
   c.set("db", null);
 }

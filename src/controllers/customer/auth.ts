@@ -99,11 +99,21 @@ export async function changePassword(c: Context<AppEnv>) {
   if (!email || !oldPassword || !newPassword)
     bad("Email, password lama, dan password baru wajib diisi");
   const user = await getUserByEmail(DB, email);
-  if (!user || !user.password_hash || !(await verifyPassword(oldPassword, user.password_hash)))
+  if (
+    !user ||
+    !user.password_hash ||
+    !(await verifyPassword(oldPassword, user.password_hash))
+  )
     bad("Password lama salah", 401);
   if (newPassword.length < 8) bad("Password baru minimal 8 karakter");
   await updateUserPassword(DB, user.id, await hashPassword(newPassword));
-  await insertLog(DB, "INFO", "Password '" + email + "' diubah", null, currentUserId(c));
+  await insertLog(
+    DB,
+    "INFO",
+    "Password '" + email + "' diubah",
+    null,
+    currentUserId(c),
+  );
   return c.json({ success: true });
 }
 
@@ -117,7 +127,8 @@ export async function updateProfile(c: Context<AppEnv>) {
     email?: string;
   } = {};
   if (body?.name !== undefined) patch.name = String(body.name).trim() || null;
-  if (body?.phone !== undefined) patch.phone = String(body.phone).trim() || null;
+  if (body?.phone !== undefined)
+    patch.phone = String(body.phone).trim() || null;
   if (body?.email !== undefined) {
     const current = await getUserById(DB, userId);
     const email = String(body.email).trim().toLowerCase();

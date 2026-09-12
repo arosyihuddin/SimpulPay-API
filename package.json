@@ -2,7 +2,7 @@
   "name": "simpulpay",
   "version": "1.0.0",
   "type": "module",
-  "description": "GoPay Merchant Payment Gateway & QRIS Verification (Cloudflare Workers + Postgres via Hyperdrive)",
+  "description": "GoPay Merchant Payment Gateway & QRIS Verification (Cloudflare Workers + Neon HTTP)",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev --test-scheduled",
@@ -17,6 +17,7 @@
   "dependencies": {
     "@hono/swagger-ui": "^0.6.1",
     "@hono/zod-openapi": "^1.6.1",
+    "@neondatabase/serverless": "^1.1.0",
     "bun": "^1.4.0",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.5",

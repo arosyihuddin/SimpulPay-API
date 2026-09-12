@@ -132,7 +132,7 @@ export default {
   fetch: app.fetch,
 
   async scheduled(event: { cron: string }, env: Env, _ctx: ExecutionContext) {
-    const { db: DB, client: DBClient } = createDb(env);
+    const { db: DB } = createDb(env);
     if (event.cron === "* * * * *") {
       // Pengganti cron hourly: sapu klaim >24 jam tiap tick (murah, no-op bila kosong).
       try {
@@ -153,6 +153,5 @@ export default {
         logger.error(`[cron] Gagal pancing DO pooling: ${errDetail(err)}`);
       }
     }
-    await DBClient.end().catch(() => {});
   },
 };
