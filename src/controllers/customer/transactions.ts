@@ -10,6 +10,7 @@ import type { TransactionStatus } from "../../db/repositories";
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
+import { startOfTodayWib } from "../../utils/day";
 import { bad, currentUserId, ownedMerchant } from "./helpers";
 
 /** Transaksi LOKAL — gabungan semua merchant user, filter status/merchant/created/expires. */
@@ -133,8 +134,7 @@ export async function transactionVolume(c: Context<AppEnv>) {
   const range = (q.range as string) || "7";
 
   const now = Date.now();
-  const startOfDay = new Date(now);
-  startOfDay.setHours(0, 0, 0, 0);
+  const startOfDay = startOfTodayWib(now);
 
   let buckets: { label: string; from: number; to: number }[];
   if (range === "today") {
@@ -142,25 +142,24 @@ export async function transactionVolume(c: Context<AppEnv>) {
     for (let h = 0; h < 24; h += 4) {
       buckets.push({
         label: `${String(h).padStart(2, "0")}:00`,
-        from: startOfDay.getTime() + h * 3600_000,
-        to: startOfDay.getTime() + (h + 4) * 3600_000 - 1,
+        from: startOfDay + h * 3600_000,
+        to: startOfDay + (h + 4) * 3600_000 - 1,
       });
     }
   } else {
     const days = range === "30" ? 30 : 7;
     buckets = [];
     for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(startOfDay);
-      d.setDate(d.getDate() - i);
-      const next = new Date(d);
-      next.setDate(next.getDate() + 1);
+      const from = startOfDay - i * 86_400_000;
+      const to = from + 86_400_000 - 1;
       buckets.push({
-        label: d.toLocaleDateString("id-ID", {
+        label: new Date(from).toLocaleDateString("id-ID", {
           day: "numeric",
           month: "short",
+          timeZone: "Asia/Jakarta",
         }),
-        from: d.getTime(),
-        to: next.getTime() - 1,
+        from,
+        to,
       });
     }
   }

@@ -6,6 +6,7 @@ import {
 import type { Context } from "hono";
 import type { AppEnv } from "../../types";
 import { getDb } from "../../db/client";
+import { startOfTodayWib, startOfMonthWib } from "../../utils/day";
 import { currentUserId } from "./helpers";
 
 export async function dashboard(c: Context<AppEnv>) {
@@ -14,20 +15,18 @@ export async function dashboard(c: Context<AppEnv>) {
   await markTransactionsExpired(DB, Date.now());
   const all = await queryTransactions(DB, { limit: 100, userId });
   const now = Date.now();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const d = new Date();
-  const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+  const todayStart = startOfTodayWib(now);
+  const monthStart = startOfMonthWib(now);
   const todayIncome = all
-    .filter((q) => q.status === "paid" && q.created_at >= todayStart.getTime())
+    .filter((q) => q.status === "paid" && q.created_at >= todayStart)
     .reduce((s, q) => s + q.amount, 0);
   const monthIncome = all
-    .filter((q) => q.status === "paid" && q.created_at >= monthStart.getTime())
+    .filter((q) => q.status === "paid" && q.created_at >= monthStart)
     .reduce((s, q) => s + q.amount, 0);
   const activeQris = all.filter(
     (q) => q.status === "pending" && q.expires_at > now,
   ).length;
-  const merchantIncome = await paidIncomeByMerchant(DB, monthStart.getTime(), userId);
+  const merchantIncome = await paidIncomeByMerchant(DB, monthStart, userId);
   const topMerchants = merchantIncome.slice(0, 5).map((m, i) => ({
     rank: i + 1,
     merchant_id: m.merchant_id,
